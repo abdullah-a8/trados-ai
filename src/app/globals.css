@@ -286,4 +286,32 @@
     border-top: 1px solid rgba(255, 255, 255, 0.2);
     margin: 2em 0;
   }
+
+  /* Fix for text areas and divs with white backgrounds */
+  .prose div[style*="background"] {
+    background: #2f2f2f !important;
+  }
+
+  .prose textarea,
+  .prose input[type="text"],
+  .prose [role="textbox"] {
+    background: #2f2f2f !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Ensure all white/light backgrounds in prose are converted to dark */
+  .prose * {
+    background-color: inherit;
+  }
+
+  .prose [style*="background-color: white"],
+  .prose [style*="background-color: #fff"],
+  .prose [style*="background-color: #ffffff"],
+  .prose [style*="background: white"],
+  .prose [style*="background: #fff"],
+  .prose [style*="background: #ffffff"] {
+    background: #2f2f2f !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
 }

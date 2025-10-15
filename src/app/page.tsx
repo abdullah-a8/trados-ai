@@ -200,7 +200,7 @@ export default function Home() {
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {messages.length === 0 ? (
             /* Welcome Screen - Centered Layout */
-            <div className="flex-1 flex items-center justify-center px-4 pb-24">
+            <div className="flex-1 flex items-center justify-center px-4 pb-24 min-h-0">
               <div className="w-full max-w-4xl">
                 {/* Welcome Message with Logo - Centered */}
                 <div className="text-center mb-8 -mt-16">
@@ -284,8 +284,8 @@ export default function Home() {
           ) : (
             /* Chat Mode - Messages with Fixed Input at Bottom */
             <>
-              {/* Messages Container - Scrollable */}
-              <div className="flex-1 overflow-y-auto px-4 py-4">
+              {/* Messages Container - Scrollable with proper flex */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
                 <div className="w-full max-w-4xl mx-auto">
                   <div className="space-y-6">
                     {messages.map((message) => (

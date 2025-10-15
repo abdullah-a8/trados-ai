@@ -24,10 +24,17 @@ export async function createChat(title?: string): Promise<string> {
  */
 export async function loadChat(chatId: string): Promise<UIMessage[]> {
   try {
-    const data = await redis.get<string>(getChatKey(chatId));
+    const data = await redis.get(getChatKey(chatId));
     if (!data) return [];
 
-    const chat: StoredChat = JSON.parse(data);
+    // Redis might return an object directly or a string
+    let chat: StoredChat;
+    if (typeof data === 'string') {
+      chat = JSON.parse(data);
+    } else {
+      chat = data as StoredChat;
+    }
+
     return chat.messages || [];
   } catch (error) {
     console.error('Error loading chat:', error);
@@ -42,10 +49,15 @@ export async function saveChat(chatId: string, messages: UIMessage[]): Promise<v
   try {
     // Load existing chat or create new
     let chat: StoredChat;
-    const existing = await redis.get<string>(getChatKey(chatId));
+    const existing = await redis.get(getChatKey(chatId));
 
     if (existing) {
-      chat = JSON.parse(existing);
+      // Redis might return an object directly or a string
+      if (typeof existing === 'string') {
+        chat = JSON.parse(existing);
+      } else {
+        chat = existing as StoredChat;
+      }
     } else {
       chat = {
         id: chatId,

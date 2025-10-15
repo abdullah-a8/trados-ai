@@ -219,7 +219,7 @@
   }
 
   .prose code {
-    background: rgba(255, 255, 255, 0.1);
+    background: #2f2f2f;
     color: #8353fd;
     padding: 0.2em 0.4em;
     border-radius: 0.25rem;
@@ -228,7 +228,8 @@
   }
 
   .prose pre {
-    background: rgba(0, 0, 0, 0.3);
+    background: #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.5rem;
     padding: 1rem;
     overflow-x: auto;

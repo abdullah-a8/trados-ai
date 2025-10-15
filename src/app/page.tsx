@@ -134,7 +134,7 @@ export default function Home() {
   }, [messages]);
 
   return (
-    <div className="flex h-screen w-full bg-[#212121] text-white relative overflow-hidden">
+    <div className="flex h-screen w-full bg-[#212121] text-white relative">
       {/* Subtle Brand Gradient Background */}
       <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
         <div className="absolute top-0 right-0 w-[1000px] h-[1000px] bg-gradient-to-br from-[#8353fd] via-[#6942ca] to-transparent blur-[150px] rounded-full" />
@@ -179,9 +179,9 @@ export default function Home() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex flex-1 flex-col overflow-hidden relative z-10">
+      <main className="flex flex-1 flex-col relative z-10 min-h-0">
         {/* Top Bar with Toggle */}
-        <div className="relative flex h-12 items-center bg-[#212121] px-3 border-b border-white/5">
+        <div className="relative flex h-12 flex-shrink-0 items-center bg-[#212121] px-3 border-b border-white/5">
           {/* Subtle gradient overlay for header */}
           <div className="absolute inset-0 bg-gradient-to-r from-[#8353fd]/6 via-transparent to-[#e60054]/6 pointer-events-none" />
 
@@ -197,7 +197,7 @@ export default function Home() {
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col relative min-h-0">
+        <div className="flex-1 flex flex-col relative overflow-hidden">
           {messages.length === 0 ? (
             /* Welcome Screen - Centered Layout */
             <div className="flex-1 flex items-center justify-center px-4 pb-24 overflow-hidden">
@@ -285,7 +285,7 @@ export default function Home() {
             /* Chat Mode - Messages with Fixed Input at Bottom */
             <>
               {/* Messages Container - Scrollable with proper flex */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 min-h-0">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
                 <div className="w-full max-w-4xl mx-auto">
                   <div className="space-y-6">
                     {messages.map((message) => (

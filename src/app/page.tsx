@@ -1,22 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { API_ROUTES, UI_CONFIG, APP_NAME } from "@/config/constants";
+import { Streamdown } from "streamdown";
+
+// Helper function to convert files to Data URLs
+async function convertFilesToDataURLs(files: FileList) {
+  return Promise.all(
+    Array.from(files).map(
+      (file) =>
+        new Promise<{
+          type: "file";
+          mediaType: string;
+          url: string;
+          filename: string;
+        }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              type: "file",
+              mediaType: file.type,
+              url: reader.result as string,
+              filename: file.name,
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        })
+    )
+  );
+}
 
 export default function Home() {
-  const [message, setMessage] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [input, setInput] = useState("");
+  const [files, setFiles] = useState<FileList | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const { messages, sendMessage, status, error } = useChat({
+    transport: new DefaultChatTransport({
+      api: API_ROUTES.chat,
+    }),
+  });
+
+  const isLoading = status === "submitted" || status === "streaming";
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setFiles(event.target.files);
+    }
+  };
+
+  // Remove selected files
+  const handleRemoveFiles = () => {
+    setFiles(undefined);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!input.trim() && (!files || files.length === 0)) return;
 
-    // TODO: Handle message sending
-    console.log("Message:", message);
-    setMessage("");
+    const fileParts = files && files.length > 0 ? await convertFilesToDataURLs(files) : [];
+
+    sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: input }, ...fileParts],
+    });
+
+    setInput("");
+    setFiles(undefined);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -44,7 +110,7 @@ export default function Home() {
               className="h-7 w-7"
             />
             <span className="text-base font-semibold bg-gradient-to-r from-[#8353fd] to-[#e60054] bg-clip-text text-transparent">
-              TRADOS AI
+              {APP_NAME}
             </span>
           </div>
 
@@ -72,47 +138,276 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* Chat Area with Centered Content */}
-        <div className="flex-1 flex items-center justify-center overflow-y-auto px-4 pb-24">
-          <div className="w-full max-w-4xl -mt-16">
-            {/* Welcome Message with Logo */}
-            <div className="text-center mb-6">
-              <Image
-                src="/trados-logo.svg"
-                alt="TRADOS Logo"
-                width={64}
-                height={64}
-                className="mx-auto mb-6 h-16 w-16 opacity-60"
-              />
-              <h1 className="text-[32px] font-normal text-white/90 mb-6">
-                What can I help you translate today?
-              </h1>
-            </div>
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {messages.length === 0 ? (
+            /* Welcome Screen - Centered Layout */
+            <div className="flex-1 flex items-center justify-center px-4 pb-24">
+              <div className="w-full max-w-4xl">
+                {/* Welcome Message with Logo - Centered */}
+                <div className="text-center mb-8 -mt-16">
+                  <Image
+                    src="/trados-logo.svg"
+                    alt="TRADOS Logo"
+                    width={64}
+                    height={64}
+                    className="mx-auto mb-6 h-16 w-16 opacity-60"
+                  />
+                  <h1 className="text-[32px] font-normal text-white/90 mb-6">
+                    {UI_CONFIG.chat.welcomeMessage}
+                  </h1>
+                </div>
 
-            {/* Message Input - Centered and Wide */}
-            <div className="w-full max-w-[48rem] mx-auto">
-              <form onSubmit={handleSendMessage} className="relative flex items-center">
-                {/* Plus Button */}
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
-                >
-                  <Plus className="h-5 w-5" />
-                  <span className="sr-only">Attach</span>
-                </Button>
+                {/* Message Input - Centered */}
+                <div className="w-full max-w-4xl mx-auto">
+                  {/* File Preview */}
+                  {files && files.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {Array.from(files).map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-[#2f2f2f] rounded-lg px-3 py-2 text-sm"
+                        >
+                          {file.type.startsWith("image/") ? (
+                            <ImageIcon className="h-4 w-4 text-white/70" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-white/70" />
+                          )}
+                          <span className="text-white/90 max-w-[200px] truncate">
+                            {file.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleRemoveFiles}
+                            className="text-white/50 hover:text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                {/* Input Field */}
-                <Input
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Ask anything..."
-                  className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg"
-                />
-              </form>
+                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                    {/* Hidden File Input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept="image/*,application/pdf"
+                      multiple
+                      className="hidden"
+                    />
+
+                    {/* Plus Button */}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                    >
+                      <Plus className="h-5 w-5" />
+                      <span className="sr-only">Attach</span>
+                    </Button>
+
+                    {/* Input Field */}
+                    <Input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      disabled={isLoading}
+                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                    />
+                  </form>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Chat Mode - Messages with Fixed Input at Bottom */
+            <>
+              {/* Messages Container - Scrollable */}
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="w-full max-w-4xl mx-auto">
+                  <div className="space-y-6">
+                    {messages.map((message) => (
+                      <div key={message.id} className="flex flex-col">
+                        <div
+                          className={`flex items-start gap-3 ${
+                            message.role === "user" ? "justify-end" : ""
+                          }`}
+                        >
+                          {message.role === "assistant" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                              <Image
+                                src="/trados-logo.svg"
+                                alt="AI"
+                                width={18}
+                                height={18}
+                                className="opacity-90"
+                              />
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                              message.role === "user"
+                                ? "bg-[#2f2f2f] text-white"
+                                : "bg-[#2a2a2a] text-white/90"
+                            }`}
+                          >
+                            {/* Render file attachments */}
+                            <div className="space-y-2 mb-2">
+                              {message.parts
+                                .filter((part) => part.type === "file")
+                                .map((part, i) => {
+                                  if (part.mediaType?.startsWith("image/")) {
+                                    return (
+                                      <div key={i} className="rounded-lg overflow-hidden">
+                                        <Image
+                                          src={part.url}
+                                          alt={part.filename || `image-${i}`}
+                                          width={400}
+                                          height={300}
+                                          className="max-w-full h-auto"
+                                        />
+                                      </div>
+                                    );
+                                  }
+                                  if (part.mediaType === "application/pdf") {
+                                    return (
+                                      <div key={i} className="rounded-lg overflow-hidden border border-white/10">
+                                        <div className="flex items-center gap-2 p-2 bg-[#1a1a1a]">
+                                          <FileText className="h-4 w-4 text-white/70" />
+                                          <span className="text-sm text-white/90">
+                                            {part.filename || `document-${i}.pdf`}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                            </div>
+
+                            {/* Render text content */}
+                            <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none">
+                              {message.parts
+                                .filter((part) => part.type === "text")
+                                .map((part, i) => (
+                                  <Streamdown
+                                    key={i}
+                                    isAnimating={status === "streaming"}
+                                  >
+                                    {part.text}
+                                  </Streamdown>
+                                ))}
+                            </div>
+                          </div>
+                          {message.role === "user" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                              <User className="w-4 h-4 text-white" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Only show thinking bubble when loading and no streaming message */}
+                    {isLoading && status === "submitted" && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                          <Image
+                            src="/trados-logo.svg"
+                            alt="AI"
+                            width={18}
+                            height={18}
+                            className="opacity-90 animate-pulse"
+                          />
+                        </div>
+                        <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-[#2a2a2a]">
+                          <div className="flex gap-1">
+                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {error && (
+                    <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                      Error: {error.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Message Input - Fixed at Bottom */}
+              <div className="flex-shrink-0 border-t border-white/10 bg-[#212121] px-4 py-4">
+                <div className="w-full max-w-4xl mx-auto">
+                  {/* File Preview */}
+                  {files && files.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {Array.from(files).map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-[#2f2f2f] rounded-lg px-3 py-2 text-sm"
+                        >
+                          {file.type.startsWith("image/") ? (
+                            <ImageIcon className="h-4 w-4 text-white/70" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-white/70" />
+                          )}
+                          <span className="text-white/90 max-w-[200px] truncate">
+                            {file.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleRemoveFiles}
+                            className="text-white/50 hover:text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                    {/* Hidden File Input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept="image/*,application/pdf"
+                      multiple
+                      className="hidden"
+                    />
+
+                    {/* Plus Button */}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                    >
+                      <Plus className="h-5 w-5" />
+                      <span className="sr-only">Attach</span>
+                    </Button>
+
+                    {/* Input Field */}
+                    <Input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      disabled={isLoading}
+                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                    />
+                  </form>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>

@@ -1,0 +1,23 @@
+/**
+ * Application-wide constants for TRADOS AI
+ */
+
+export const APP_NAME = 'TRADOS AI';
+
+export const APP_DESCRIPTION = 'Professional translation and transcription assistant';
+
+export const UI_CONFIG = {
+  sidebar: {
+    width: 256, // w-64 in px
+    widthCollapsed: 0,
+  },
+  chat: {
+    maxWidth: '48rem',
+    inputPlaceholder: 'Ask me to translate something...',
+    welcomeMessage: 'What can I help you translate today?',
+  },
+} as const;
+
+export const API_ROUTES = {
+  chat: '/api/chat',
+} as const;

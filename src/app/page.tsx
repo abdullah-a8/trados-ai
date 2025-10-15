@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { PanelLeft, Plus, User, X, FileText, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { API_ROUTES, UI_CONFIG, APP_NAME } from "@/config/constants";
 import { Streamdown } from "streamdown";
+import { nanoid } from "nanoid";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -41,11 +42,22 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | undefined>(undefined);
+  const [chatId] = useState(() => nanoid()); // Generate unique chat ID
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { messages, sendMessage, status, error } = useChat({
+    id: chatId, // Use the chat ID
     transport: new DefaultChatTransport({
       api: API_ROUTES.chat,
+      // IMPORTANT: Only send the last message to reduce network traffic
+      prepareSendMessagesRequest({ messages, id }) {
+        return {
+          body: {
+            message: messages[messages.length - 1], // Only last message
+            id // Chat ID
+          }
+        };
+      },
     }),
   });
 
@@ -85,6 +97,12 @@ export default function Home() {
     }
   };
 
+  // Auto-scroll to bottom when new messages arrive
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   return (
     <div className="flex h-screen w-full bg-[#212121] text-white relative overflow-hidden">
       {/* Subtle Brand Gradient Background */}
@@ -120,7 +138,11 @@ export default function Home() {
           {/* Sidebar Content - Chat History Placeholder */}
           <div className="flex-1 overflow-y-auto p-2">
             <div className="text-sm text-white/50 p-3">
-              Chat history will appear here
+              <p className="font-medium mb-2">Current Chat</p>
+              <p className="text-xs opacity-75">ID: {chatId.slice(0, 8)}...</p>
+              <p className="text-xs opacity-75 mt-1">
+                Messages: {messages.length}
+              </p>
             </div>
           </div>
         </div>
@@ -162,6 +184,9 @@ export default function Home() {
                   <h1 className="text-[32px] font-normal text-white/90 mb-6">
                     {UI_CONFIG.chat.welcomeMessage}
                   </h1>
+                  <p className="text-sm text-white/50">
+                    Your chat history is automatically saved
+                  </p>
                 </div>
 
                 {/* Message Input - Centered */}
@@ -338,6 +363,7 @@ export default function Home() {
                         </div>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
                   {error && (
                     <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">

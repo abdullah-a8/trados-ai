@@ -121,18 +121,18 @@ export default function Home() {
     loadChatMessages();
   }, [chatId, setMessages]);
 
-  // Generate AI title after first user message
+  // Generate AI title after first exchange and add to sidebar
   useEffect(() => {
-    const generateTitle = async () => {
-      if (messages.length === 2 && !hasGeneratedTitle.current) {
-        // After first exchange (user + assistant)
+    const generateTitleAndAddToSidebar = async () => {
+      // After first exchange (user + assistant), generate AI title
+      if (messages.length >= 2 && !hasGeneratedTitle.current) {
         hasGeneratedTitle.current = true;
         const firstUserMessage = messages.find(m => m.role === 'user');
         if (firstUserMessage) {
           const textPart = firstUserMessage.parts.find(p => p.type === 'text');
           if (textPart && textPart.text) {
             try {
-              await fetch(API_ROUTES.generateTitle, {
+              const titleResponse = await fetch(API_ROUTES.generateTitle, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -140,11 +140,32 @@ export default function Home() {
                   firstMessage: textPart.text,
                 }),
               });
-              // Refresh chat history to show new title
-              const response = await fetch(API_ROUTES.chats);
-              if (response.ok) {
-                const data = await response.json();
-                setChatHistory(data.chats || []);
+
+              if (titleResponse.ok) {
+                const { title } = await titleResponse.json();
+
+                // Add the new chat to sidebar with AI-generated title
+                const newChat: StoredChat = {
+                  id: chatId,
+                  title,
+                  messages: [],
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+
+                setChatHistory(prev => {
+                  // Check if chat already exists (in case of race condition)
+                  if (prev.some(c => c.id === chatId)) {
+                    // Update existing
+                    return prev.map(chat =>
+                      chat.id === chatId
+                        ? { ...chat, title, updatedAt: new Date().toISOString() }
+                        : chat
+                    );
+                  }
+                  // Add new chat at the top
+                  return [newChat, ...prev];
+                });
               }
             } catch (error) {
               console.error('Failed to generate title:', error);
@@ -154,7 +175,7 @@ export default function Home() {
       }
     };
 
-    generateTitle();
+    generateTitleAndAddToSidebar();
   }, [messages, chatId]);
 
   // Handle creating a new chat

@@ -42,10 +42,21 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | undefined>(undefined);
-  const [chatId] = useState(() => nanoid()); // Generate unique chat ID
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { messages, sendMessage, status, error } = useChat({
+  // Get or create chat ID from localStorage
+  const [chatId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('currentChatId');
+      if (stored) return stored;
+      const newId = nanoid();
+      localStorage.setItem('currentChatId', newId);
+      return newId;
+    }
+    return nanoid();
+  });
+
+  const { messages, sendMessage, status, error, setMessages } = useChat({
     id: chatId, // Use the chat ID
     transport: new DefaultChatTransport({
       api: API_ROUTES.chat,
@@ -62,6 +73,25 @@ export default function Home() {
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        const response = await fetch(`${API_ROUTES.chat}?id=${chatId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+    };
+
+    loadChatHistory();
+  }, [chatId, setMessages]);
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,9 +214,6 @@ export default function Home() {
                   <h1 className="text-[32px] font-normal text-white/90 mb-6">
                     {UI_CONFIG.chat.welcomeMessage}
                   </h1>
-                  <p className="text-sm text-white/50">
-                    Your chat history is automatically saved
-                  </p>
                 </div>
 
                 {/* Message Input - Centered */}

@@ -244,12 +244,16 @@ export default function Home() {
 
   // Auto-scroll to bottom when new messages arrive
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages]);
 
   return (
-    <div className="flex h-screen w-full bg-[#212121] text-white relative">
+    <div className="flex h-screen w-screen bg-[#212121] text-white relative overflow-hidden fixed inset-0">
       {/* Subtle Brand Gradient Background */}
       <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
         <div className="absolute top-0 right-0 w-[1000px] h-[1000px] bg-gradient-to-br from-[#8353fd] via-[#6942ca] to-transparent blur-[150px] rounded-full" />
@@ -453,7 +457,7 @@ export default function Home() {
             /* Chat Mode - Messages with Fixed Input at Bottom */
             <>
               {/* Messages Container - Scrollable with proper flex */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
                 <div className="w-full max-w-4xl mx-auto">
                   <div className="space-y-6">
                     {messages.map((message) => (

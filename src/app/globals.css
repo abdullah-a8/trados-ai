@@ -144,8 +144,18 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html, body {
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+  #__next {
     height: 100%;
     overflow: hidden;
   }

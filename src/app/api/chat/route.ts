@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       model: openai(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: modelMessages,
-      maxTokens: 2000, // Limit response length to avoid timeouts
+      maxOutputTokens: 2000, // Limit response length to avoid timeouts
     });
 
     // Return streaming response with persistence

@@ -99,7 +99,10 @@ export default function Home() {
           isSidebarOpen ? "w-64" : "w-0"
         } flex-shrink-0 border-r border-white/10 bg-[#171717] transition-all duration-300 ease-in-out overflow-hidden relative z-10`}
       >
-        <div className="flex h-full flex-col">
+        {/* Subtle gradient from bottom up */}
+        <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-[#8353fd]/8 via-[#6942ca]/4 to-transparent pointer-events-none" />
+
+        <div className="flex h-full flex-col relative z-10">
           {/* Sidebar Header with Logo */}
           <div className="flex items-center gap-3 border-b border-white/10 p-4">
             <Image
@@ -126,12 +129,15 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex flex-1 flex-col overflow-hidden relative z-10">
         {/* Top Bar with Toggle */}
-        <div className="flex h-12 items-center bg-[#212121] px-3">
+        <div className="relative flex h-12 items-center bg-[#212121] px-3 border-b border-white/5">
+          {/* Subtle gradient overlay for header */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#8353fd]/6 via-transparent to-[#e60054]/6 pointer-events-none" />
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="h-8 w-8 text-white/70 hover:bg-white/10 hover:text-white"
+            className="h-8 w-8 text-white/70 hover:bg-white/10 hover:text-white relative z-10"
           >
             <PanelLeft className="h-5 w-5" />
             <span className="sr-only">Toggle sidebar</span>

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2 } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
@@ -468,8 +468,23 @@ export default function Home() {
                       onChange={(e) => setInput(e.target.value)}
                       placeholder={UI_CONFIG.chat.inputPlaceholder}
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
+
+                    {/* Send Button */}
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={isLoading || (!input.trim() && (!files || files.length === 0))}
+                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                        input.trim() || (files && files.length > 0)
+                          ? "bg-white text-black hover:bg-white/90"
+                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                      }`}
+                    >
+                      <ArrowUp className="h-5 w-5" />
+                      <span className="sr-only">Send message</span>
+                    </Button>
                   </form>
                 </div>
               </div>
@@ -653,8 +668,23 @@ export default function Home() {
                       onChange={(e) => setInput(e.target.value)}
                       placeholder={UI_CONFIG.chat.inputPlaceholder}
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
+
+                    {/* Send Button */}
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={isLoading || (!input.trim() && (!files || files.length === 0))}
+                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                        input.trim() || (files && files.length > 0)
+                          ? "bg-white text-black hover:bg-white/90"
+                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                      }`}
+                    >
+                      <ArrowUp className="h-5 w-5" />
+                      <span className="sr-only">Send message</span>
+                    </Button>
                   </form>
                 </div>
               </div>

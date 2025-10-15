@@ -288,30 +288,59 @@
   }
 
   /* Fix for text areas and divs with white backgrounds */
+  .prose div,
+  .prose span,
+  .prose p {
+    background-color: transparent !important;
+  }
+
   .prose div[style*="background"] {
     background: #2f2f2f !important;
   }
 
   .prose textarea,
   .prose input[type="text"],
-  .prose [role="textbox"] {
+  .prose input,
+  .prose [role="textbox"],
+  .prose [contenteditable="true"] {
     background: #2f2f2f !important;
     color: rgba(255, 255, 255, 0.9) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    padding: 0.5rem !important;
+    border-radius: 0.375rem !important;
   }
 
   /* Ensure all white/light backgrounds in prose are converted to dark */
-  .prose * {
-    background-color: inherit;
-  }
-
   .prose [style*="background-color: white"],
   .prose [style*="background-color: #fff"],
   .prose [style*="background-color: #ffffff"],
+  .prose [style*="background-color:#fff"],
+  .prose [style*="background-color:#ffffff"],
+  .prose [style*="background-color:white"],
   .prose [style*="background: white"],
   .prose [style*="background: #fff"],
-  .prose [style*="background: #ffffff"] {
+  .prose [style*="background: #ffffff"],
+  .prose [style*="background:#fff"],
+  .prose [style*="background:#ffffff"],
+  .prose [style*="background:white"],
+  .prose [style*="background-color: rgb(255, 255, 255)"],
+  .prose [style*="background-color:rgb(255,255,255)"],
+  .prose [style*="background: rgb(255, 255, 255)"],
+  .prose [style*="background:rgb(255,255,255)"] {
     background: #2f2f2f !important;
+    background-color: #2f2f2f !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  /* Target any element with white text color */
+  .prose [style*="color: white"],
+  .prose [style*="color: #fff"],
+  .prose [style*="color: #ffffff"],
+  .prose [style*="color:#fff"],
+  .prose [style*="color:#ffffff"],
+  .prose [style*="color:white"],
+  .prose [style*="color: rgb(255, 255, 255)"],
+  .prose [style*="color:rgb(255,255,255)"] {
     color: rgba(255, 255, 255, 0.9) !important;
   }
 }

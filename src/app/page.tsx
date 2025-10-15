@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus, User, X, FileText, ImageIcon } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
@@ -10,6 +10,7 @@ import { DefaultChatTransport } from "ai";
 import { API_ROUTES, UI_CONFIG, APP_NAME } from "@/config/constants";
 import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
+import { StoredChat } from "@/lib/redis";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -42,15 +43,23 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | undefined>(undefined);
+  const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasGeneratedTitle = useRef(false);
 
-  // Get or create chat ID from localStorage
-  const [chatId] = useState(() => {
+  // Session-aware chat ID management
+  const [chatId, setChatId] = useState(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('currentChatId');
-      if (stored) return stored;
+      // Check if there's a session flag (set when explicitly loading a chat)
+      const sessionId = sessionStorage.getItem('currentChatId');
+      if (sessionId) {
+        // This is a refresh of an existing session
+        return sessionId;
+      }
+      // New session - always start fresh
       const newId = nanoid();
-      localStorage.setItem('currentChatId', newId);
+      sessionStorage.setItem('currentChatId', newId);
       return newId;
     }
     return nanoid();
@@ -74,9 +83,28 @@ export default function Home() {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load chat history on mount
+  // Load chat history list on mount
   useEffect(() => {
-    const loadChatHistory = async () => {
+    const loadChatsHistory = async () => {
+      try {
+        const response = await fetch(API_ROUTES.chats);
+        if (response.ok) {
+          const data = await response.json();
+          setChatHistory(data.chats || []);
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadChatsHistory();
+  }, []);
+
+  // Load current chat messages on mount or chat ID change
+  useEffect(() => {
+    const loadChatMessages = async () => {
       try {
         const response = await fetch(`${API_ROUTES.chat}?id=${chatId}`);
         if (response.ok) {
@@ -86,12 +114,99 @@ export default function Home() {
           }
         }
       } catch (error) {
-        console.error('Failed to load chat history:', error);
+        console.error('Failed to load chat messages:', error);
       }
     };
 
-    loadChatHistory();
+    loadChatMessages();
   }, [chatId, setMessages]);
+
+  // Generate AI title after first user message
+  useEffect(() => {
+    const generateTitle = async () => {
+      if (messages.length === 2 && !hasGeneratedTitle.current) {
+        // After first exchange (user + assistant)
+        hasGeneratedTitle.current = true;
+        const firstUserMessage = messages.find(m => m.role === 'user');
+        if (firstUserMessage) {
+          const textPart = firstUserMessage.parts.find(p => p.type === 'text');
+          if (textPart && textPart.text) {
+            try {
+              await fetch(API_ROUTES.generateTitle, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chatId,
+                  firstMessage: textPart.text,
+                }),
+              });
+              // Refresh chat history to show new title
+              const response = await fetch(API_ROUTES.chats);
+              if (response.ok) {
+                const data = await response.json();
+                setChatHistory(data.chats || []);
+              }
+            } catch (error) {
+              console.error('Failed to generate title:', error);
+            }
+          }
+        }
+      }
+    };
+
+    generateTitle();
+  }, [messages, chatId]);
+
+  // Handle creating a new chat
+  const handleNewChat = () => {
+    const newId = nanoid();
+    setChatId(newId);
+    sessionStorage.setItem('currentChatId', newId);
+    setMessages([]);
+    hasGeneratedTitle.current = false;
+  };
+
+  // Handle loading a previous chat
+  const handleLoadChat = async (selectedChatId: string) => {
+    setChatId(selectedChatId);
+    sessionStorage.setItem('currentChatId', selectedChatId);
+    hasGeneratedTitle.current = true; // Don't regenerate title for existing chats
+
+    try {
+      const response = await fetch(`${API_ROUTES.chat}?id=${selectedChatId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.messages) {
+          setMessages(data.messages);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load chat:', error);
+    }
+  };
+
+  // Handle deleting a chat
+  const handleDeleteChat = async (chatIdToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering chat load
+
+    try {
+      const response = await fetch(`${API_ROUTES.chats}?id=${chatIdToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove from local state
+        setChatHistory(prev => prev.filter(chat => chat.id !== chatIdToDelete));
+
+        // If we deleted the current chat, create a new one
+        if (chatIdToDelete === chatId) {
+          handleNewChat();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+    }
+  };
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,14 +280,67 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Sidebar Content - Chat History Placeholder */}
+          {/* New Chat Button */}
+          <div className="p-2 border-b border-white/10">
+            <Button
+              onClick={handleNewChat}
+              className="w-full h-10 bg-white/5 hover:bg-white/10 text-white border border-white/10 flex items-center justify-center gap-2"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              <span>New Chat</span>
+            </Button>
+          </div>
+
+          {/* Chat History */}
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="text-sm text-white/50 p-3">
-              <p className="font-medium mb-2">Current Chat</p>
-              <p className="text-xs opacity-75">ID: {chatId.slice(0, 8)}...</p>
-              <p className="text-xs opacity-75 mt-1">
-                Messages: {messages.length}
-              </p>
+            {isLoadingHistory ? (
+              <div className="text-sm text-white/50 p-3 text-center">
+                Loading chats...
+              </div>
+            ) : chatHistory.length === 0 ? (
+              <div className="text-sm text-white/50 p-3 text-center">
+                No chat history yet
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {chatHistory.map((chat) => (
+                  <div
+                    key={chat.id}
+                    onClick={() => handleLoadChat(chat.id)}
+                    className={`group relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                      chat.id === chatId
+                        ? "bg-white/10 text-white"
+                        : "hover:bg-white/5 text-white/70 hover:text-white"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="text-sm font-medium truncate">
+                        {chat.title}
+                      </p>
+                      <p className="text-xs text-white/50 mt-0.5">
+                        {new Date(chat.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => handleDeleteChat(chat.id, e)}
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Current Session Info */}
+          <div className="p-3 border-t border-white/10">
+            <div className="text-xs text-white/50">
+              <p className="font-medium mb-1">Current Session</p>
+              <p className="truncate">ID: {chatId.slice(0, 8)}...</p>
+              <p className="mt-0.5">Messages: {messages.length}</p>
             </div>
           </div>
         </div>

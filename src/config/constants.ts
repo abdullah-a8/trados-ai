@@ -20,4 +20,6 @@ export const UI_CONFIG = {
 
 export const API_ROUTES = {
   chat: '/api/chat',
+  chats: '/api/chats',
+  generateTitle: '/api/chats/generate-title',
 } as const;

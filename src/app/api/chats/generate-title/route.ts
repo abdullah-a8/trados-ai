@@ -24,7 +24,6 @@ export async function POST(req: Request) {
       model: openai('gpt-4o-mini'), // Use faster, cheaper model for titles
       system: 'You are a title generator. Generate a very short, concise title (max 6 words) that captures the main topic of the user\'s message. Only return the title, no quotes or extra text.',
       prompt: `Generate a short title for this message: "${firstMessage}"`,
-      maxTokens: 20,
     });
 
     // Update the chat title in Redis

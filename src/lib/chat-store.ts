@@ -92,6 +92,35 @@ export async function deleteChat(chatId: string): Promise<void> {
 }
 
 /**
+ * Update chat title
+ */
+export async function updateChatTitle(chatId: string, title: string): Promise<void> {
+  try {
+    const data = await redis.get(getChatKey(chatId));
+    if (!data) return;
+
+    let chat: StoredChat;
+    if (typeof data === 'string') {
+      chat = JSON.parse(data);
+    } else {
+      chat = data as StoredChat;
+    }
+
+    chat.title = title;
+    chat.updatedAt = new Date().toISOString();
+
+    await redis.set(
+      getChatKey(chatId),
+      JSON.stringify(chat),
+      { ex: 30 * 24 * 60 * 60 } // 30 days
+    );
+  } catch (error) {
+    console.error('Error updating chat title:', error);
+    throw error;
+  }
+}
+
+/**
  * Extract title from messages (use first user message)
  */
 function extractTitle(messages: UIMessage[]): string {

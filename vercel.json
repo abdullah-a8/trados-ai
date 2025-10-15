@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "src/app/api/chats/generate-title/route.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  }
+}
+

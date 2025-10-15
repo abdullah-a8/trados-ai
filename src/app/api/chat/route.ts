@@ -9,10 +9,10 @@ import { TRADOS_SYSTEM_PROMPT } from '@/config/prompts';
 import { MODEL_CONFIG } from '@/config/model';
 import { loadChat, saveChat } from '@/lib/chat-store';
 
-// Allow streaming responses up to 60 seconds
-// Note: Vercel limits: Hobby=10s, Pro=60s, Enterprise=900s
-// Note: maxDuration must be a static number for Next.js to analyze it correctly
-export const maxDuration = 60;
+// Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
+// Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
+// With Fluid Compute enabled, you get up to 800s on Pro/Enterprise
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
@@ -25,8 +25,19 @@ export async function POST(req: Request) {
       id: string;
     } = await req.json();
 
-    // Load previous messages from Redis
-    const previousMessages = await loadChat(chatId);
+    // Load previous messages from Redis (with timeout handling)
+    let previousMessages: UIMessage[];
+    try {
+      previousMessages = await Promise.race([
+        loadChat(chatId),
+        new Promise<UIMessage[]>((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 3000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Redis load timeout or error, starting fresh:', error);
+      previousMessages = [];
+    }
 
     // Combine previous messages with the new message
     const allMessages = [...previousMessages, message];
@@ -39,7 +50,6 @@ export async function POST(req: Request) {
       model: openai(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: modelMessages,
-      maxOutputTokens: 2000, // Limit response length to avoid timeouts
     });
 
     // Return streaming response with persistence

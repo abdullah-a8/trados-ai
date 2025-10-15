@@ -9,9 +9,10 @@ import { TRADOS_SYSTEM_PROMPT } from '@/config/prompts';
 import { MODEL_CONFIG } from '@/config/model';
 import { loadChat, saveChat } from '@/lib/chat-store';
 
-// Allow streaming responses up to 30 seconds (Vercel Hobby tier limit)
+// Allow streaming responses up to 60 seconds
+// Note: Vercel limits: Hobby=10s, Pro=60s, Enterprise=900s
 // Note: maxDuration must be a static number for Next.js to analyze it correctly
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
       model: openai(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: modelMessages,
+      maxTokens: 2000, // Limit response length to avoid timeouts
     });
 
     // Return streaming response with persistence

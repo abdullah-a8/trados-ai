@@ -3,7 +3,8 @@ import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
 import { updateChatTitle } from '@/lib/chat-store';
 
-export const maxDuration = 10;
+// Title generation should be fast, but allow some buffer
+export const maxDuration = 15;
 
 /**
  * POST endpoint to generate AI title for a chat

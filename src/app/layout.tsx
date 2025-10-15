@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TRADOS AI - Translation & Transcription Assistant",
   description: "AI-powered translation and transcription tool for professional translation agencies",
+  icons: {
+    icon: '/trados-logo.svg',
+    shortcut: '/trados-logo.svg',
+    apple: '/trados-logo.svg',
+  },
 };
 
 export default function RootLayout({

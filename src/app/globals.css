@@ -1,26 +1,148 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --radius: 0.625rem;
+
+  /* TRADOS Brand Colors */
+  --trados-purple: #8353fd;
+  --trados-purple-dark: #6942ca;
+  --trados-purple-deep: #3e016f;
+  --trados-pink: #e60054;
+  --trados-pink-medium: #eb3376;
+
+  /* Main UI Colors - Light background for content focus */
+  --background: 255 255 255; /* Pure white background for content */
+  --foreground: 23 23 23; /* Near black for text */
+
+  --card: 255 255 255;
+  --card-foreground: 23 23 23;
+
+  --popover: 255 255 255;
+  --popover-foreground: 23 23 23;
+
+  /* Primary - TRADOS Purple for key actions */
+  --primary: 131 83 253; /* #8353fd */
+  --primary-foreground: 255 255 255;
+
+  /* Secondary - Subtle backgrounds */
+  --secondary: 245 245 245; /* Light gray */
+  --secondary-foreground: 23 23 23;
+
+  /* Muted - Very subtle backgrounds */
+  --muted: 250 250 250;
+  --muted-foreground: 115 115 115;
+
+  /* Accent - TRADOS Pink for highlights */
+  --accent: 230 0 84; /* #e60054 */
+  --accent-foreground: 255 255 255;
+
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+
+  /* Borders - Very subtle */
+  --border: 229 229 229;
+  --input: 229 229 229;
+  --ring: 131 83 253; /* Purple focus ring */
+
+  /* Sidebar - Slightly darker than main for subtle contrast */
+  --sidebar: 250 250 250;
+  --sidebar-foreground: 23 23 23;
+  --sidebar-primary: 131 83 253;
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 245 245 245;
+  --sidebar-accent-foreground: 23 23 23;
+  --sidebar-border: 229 229 229;
+  --sidebar-ring: 131 83 253;
+}
+
+.dark {
+  /* Dark theme using TRADOS deep purples */
+  --background: 15 0 27; /* Deep purple background */
+  --foreground: 250 250 250;
+
+  --card: 25 0 37;
+  --card-foreground: 250 250 250;
+
+  --popover: 25 0 37;
+  --popover-foreground: 250 250 250;
+
+  --primary: 131 83 253; /* Keep TRADOS purple */
+  --primary-foreground: 255 255 255;
+
+  --secondary: 50 1 111; /* Deep purple secondary */
+  --secondary-foreground: 250 250 250;
+
+  --muted: 32 1 89;
+  --muted-foreground: 180 180 180;
+
+  --accent: 230 0 84; /* TRADOS Pink */
+  --accent-foreground: 255 255 255;
+
+  --destructive: 220 38 38;
+  --destructive-foreground: 250 250 250;
+
+  --border: 50 1 111;
+  --input: 50 1 111;
+  --ring: 131 83 253;
+
+  --sidebar: 19 0 33;
+  --sidebar-foreground: 250 250 250;
+  --sidebar-primary: 131 83 253;
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 32 1 89;
+  --sidebar-accent-foreground: 250 250 250;
+  --sidebar-border: 50 1 111;
+  --sidebar-ring: 131 83 253;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground;
+  }
 }

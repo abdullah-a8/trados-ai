@@ -1,103 +1,120 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
+import { PanelLeft, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [message, setMessage] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+
+    // TODO: Handle message sending
+    console.log("Message:", message);
+    setMessage("");
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-[#212121] text-white relative overflow-hidden">
+      {/* Subtle Brand Gradient Background */}
+      <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
+        <div className="absolute top-0 right-0 w-[1000px] h-[1000px] bg-gradient-to-br from-[#8353fd] via-[#6942ca] to-transparent blur-[150px] rounded-full" />
+        <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-gradient-to-tr from-[#e60054] via-[#eb3376] to-transparent blur-[130px] rounded-full" />
+      </div>
+
+      {/* Left Sidebar */}
+      <aside
+        className={`${
+          isSidebarOpen ? "w-64" : "w-0"
+        } flex-shrink-0 border-r border-white/10 bg-[#171717] transition-all duration-300 ease-in-out overflow-hidden relative z-10`}
+      >
+        <div className="flex h-full flex-col">
+          {/* Sidebar Header with Logo */}
+          <div className="flex items-center gap-3 border-b border-white/10 p-4">
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+              src="/trados-logo.svg"
+              alt="TRADOS Logo"
+              width={28}
+              height={28}
+              className="h-7 w-7"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <span className="text-base font-semibold bg-gradient-to-r from-[#8353fd] to-[#e60054] bg-clip-text text-transparent">
+              TRADOS AI
+            </span>
+          </div>
+
+          {/* Sidebar Content - Chat History Placeholder */}
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="text-sm text-white/50 p-3">
+              Chat history will appear here
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex flex-1 flex-col overflow-hidden relative z-10">
+        {/* Top Bar with Toggle */}
+        <div className="flex h-12 items-center bg-[#212121] px-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="h-8 w-8 text-white/70 hover:bg-white/10 hover:text-white"
           >
-            Read our docs
-          </a>
+            <PanelLeft className="h-5 w-5" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        </div>
+
+        {/* Chat Area with Centered Content */}
+        <div className="flex-1 flex items-center justify-center overflow-y-auto px-4 pb-24">
+          <div className="w-full max-w-4xl -mt-16">
+            {/* Welcome Message with Logo */}
+            <div className="text-center mb-6">
+              <Image
+                src="/trados-logo.svg"
+                alt="TRADOS Logo"
+                width={64}
+                height={64}
+                className="mx-auto mb-6 h-16 w-16 opacity-60"
+              />
+              <h1 className="text-[32px] font-normal text-white/90 mb-6">
+                What can I help you translate today?
+              </h1>
+            </div>
+
+            {/* Message Input - Centered and Wide */}
+            <div className="w-full max-w-[48rem] mx-auto">
+              <form onSubmit={handleSendMessage} className="relative flex items-center">
+                {/* Plus Button */}
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="sr-only">Attach</span>
+                </Button>
+
+                {/* Input Field */}
+                <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Ask anything..."
+                  className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-4 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg"
+                />
+              </form>
+            </div>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }

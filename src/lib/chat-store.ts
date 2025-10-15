@@ -148,9 +148,16 @@ export async function listChats(limit: number = 20): Promise<StoredChat[]> {
     const chats: StoredChat[] = [];
 
     for (const key of keys.slice(0, limit)) {
-      const data = await redis.get<string>(key);
+      const data = await redis.get(key);
       if (data) {
-        chats.push(JSON.parse(data));
+        // Redis might return an object directly or a string
+        let chat: StoredChat;
+        if (typeof data === 'string') {
+          chat = JSON.parse(data);
+        } else {
+          chat = data as StoredChat;
+        }
+        chats.push(chat);
       }
     }
 

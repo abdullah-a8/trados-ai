@@ -42,8 +42,28 @@ export async function POST(req: Request) {
     // Combine previous messages with the new message
     const allMessages = [...previousMessages, message];
 
-    // Convert to format expected by AI model
-    const modelMessages = convertToModelMessages(allMessages);
+    // Convert UI messages to model format, transforming file parts to image parts for vision models
+    const modelMessages = convertToModelMessages(allMessages).map(msg => {
+      // Only process user messages with content arrays
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        return {
+          ...msg,
+          content: msg.content.map((part: any) => {
+            // Convert file parts with image media types to image parts for GPT-4o vision
+            // FilePart has: { type: 'file', data: DataContent | URL, mediaType: string }
+            // ImagePart needs: { type: 'image', image: DataContent | URL }
+            if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
+              return {
+                type: 'image',
+                image: part.data, // Can be data URL, Buffer, or URL
+              };
+            }
+            return part;
+          })
+        };
+      }
+      return msg;
+    });
 
     // Stream the AI response
     const result = streamText({

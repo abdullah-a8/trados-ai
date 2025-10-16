@@ -48,14 +48,14 @@ export async function POST(req: Request) {
       if (msg.role === 'user' && Array.isArray(msg.content)) {
         return {
           ...msg,
-          content: msg.content.map((part: any) => {
+          content: msg.content.map((part) => {
             // Convert file parts with image media types to image parts for GPT-4o vision
             // FilePart has: { type: 'file', data: DataContent | URL, mediaType: string }
             // ImagePart needs: { type: 'image', image: DataContent | URL }
-            if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
+            if (part.type === 'file' && 'mediaType' in part && typeof part.mediaType === 'string' && part.mediaType.startsWith('image/')) {
               return {
-                type: 'image',
-                image: part.data, // Can be data URL, Buffer, or URL
+                type: 'image' as const,
+                image: 'data' in part ? part.data : part,
               };
             }
             return part;

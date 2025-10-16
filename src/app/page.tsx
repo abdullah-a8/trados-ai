@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2, ArrowUp, Copy, Check } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
@@ -11,6 +11,7 @@ import { API_ROUTES, UI_CONFIG, APP_NAME } from "@/config/constants";
 import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";
+import { marked } from "marked";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -42,7 +43,7 @@ async function convertFilesToDataURLs(files: FileList) {
 export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
-  const [files, setFiles] = useState<FileList | undefined>(undefined);
+  const [files, setFiles] = useState<File[]>([]);
   const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
@@ -235,13 +236,15 @@ export default function Home() {
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setFiles(event.target.files);
+      // Add new files to existing files
+      setFiles(prev => [...prev, ...Array.from(event.target.files!)]);
     }
   };
 
-  // Remove selected files
-  const handleRemoveFiles = () => {
-    setFiles(undefined);
+  // Remove individual file
+  const handleRemoveFile = (indexToRemove: number) => {
+    setFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+    // Reset the file input to allow re-selecting the same file
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -285,30 +288,52 @@ export default function Home() {
       );
 
       if (supportedFiles.length > 0) {
-        const dataTransfer = new DataTransfer();
-        supportedFiles.forEach(file => dataTransfer.items.add(file));
-        setFiles(dataTransfer.files);
+        // Add to existing files instead of replacing
+        setFiles(prev => [...prev, ...supportedFiles]);
       }
     }
   };
 
-  // Handle copying message text
+  // Handle copying message text with rich formatting
   const handleCopyMessage = async (messageId: string, text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      // Convert markdown to HTML
+      const htmlContent = await marked(text);
+
+      // Create clipboard items with both HTML and plain text formats
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+      const textBlob = new Blob([text], { type: 'text/plain' });
+
+      const clipboardItem = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob
+      });
+
+      await navigator.clipboard.write([clipboardItem]);
       setCopiedMessageId(messageId);
       setTimeout(() => setCopiedMessageId(null), 2000);
     } catch (err) {
       console.error('Failed to copy text:', err);
+      // Fallback to plain text if clipboard API fails
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopiedMessageId(messageId);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+      } catch (fallbackErr) {
+        console.error('Fallback copy also failed:', fallbackErr);
+      }
     }
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() && (!files || files.length === 0)) return;
+    if (!input.trim() && files.length === 0) return;
 
-    const fileParts = files && files.length > 0 ? await convertFilesToDataURLs(files) : [];
+    // Convert File[] to FileList for the conversion function
+    const dataTransfer = new DataTransfer();
+    files.forEach(file => dataTransfer.items.add(file));
+    const fileParts = files.length > 0 ? await convertFilesToDataURLs(dataTransfer.files) : [];
 
     sendMessage({
       role: "user",
@@ -316,7 +341,7 @@ export default function Home() {
     });
 
     setInput("");
-    setFiles(undefined);
+    setFiles([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -360,7 +385,7 @@ export default function Home() {
               className="h-7 w-7"
             />
             <span className="text-base font-semibold bg-gradient-to-r from-[#8353fd] to-[#e60054] bg-clip-text text-transparent">
-              {APP_NAME}
+              TRADOS <span className="text-xs">by</span> GLI
             </span>
           </div>
 
@@ -490,28 +515,46 @@ export default function Home() {
                 {/* Message Input - Centered */}
                 <div className="w-full max-w-4xl mx-auto">
                   {/* File Preview */}
-                  {files && files.length > 0 && (
+                  {files.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {Array.from(files).map((file, index) => (
+                      {files.map((file, index) => (
                         <div
                           key={index}
-                          className="flex items-center gap-2 bg-[#2f2f2f] rounded-lg px-3 py-2 text-sm"
+                          className="relative group bg-[#2f2f2f] rounded-lg overflow-hidden"
                         >
                           {file.type.startsWith("image/") ? (
-                            <ImageIcon className="h-4 w-4 text-white/70" />
+                            // Image thumbnail preview
+                            <div className="relative w-20 h-20">
+                              <Image
+                                src={URL.createObjectURL(file)}
+                                alt={file.name}
+                                fill
+                                className="object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile(index)}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white/90 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           ) : (
-                            <FileText className="h-4 w-4 text-white/70" />
+                            // PDF/Document preview
+                            <div className="flex items-center gap-2 px-3 py-2 text-sm min-w-[120px]">
+                              <FileText className="h-4 w-4 text-white/70 flex-shrink-0" />
+                              <span className="text-white/90 max-w-[150px] truncate text-xs">
+                                {file.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile(index)}
+                                className="text-white/50 hover:text-white ml-auto"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
                           )}
-                          <span className="text-white/90 max-w-[200px] truncate">
-                            {file.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleRemoveFiles}
-                            className="text-white/50 hover:text-white"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -553,9 +596,9 @@ export default function Home() {
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={isLoading || (!input.trim() && (!files || files.length === 0))}
+                      disabled={isLoading || (!input.trim() && files.length === 0)}
                       className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
-                        input.trim() || (files && files.length > 0)
+                        input.trim() || files.length > 0
                           ? "bg-white text-black hover:bg-white/90"
                           : "bg-white/10 text-white/30 hover:bg-white/20"
                       }`}
@@ -588,13 +631,13 @@ export default function Home() {
                             }`}
                           >
                             {message.role === "assistant" && (
-                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                              <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
                                 <Image
                                   src="/trados-logo.svg"
                                   alt="AI"
-                                  width={18}
-                                  height={18}
-                                  className="opacity-90"
+                                  width={32}
+                                  height={32}
+                                  className="w-8 h-8"
                                 />
                               </div>
                             )}
@@ -689,13 +732,13 @@ export default function Home() {
                     {/* Only show thinking bubble when loading and no streaming message */}
                     {isLoading && status === "submitted" && (
                       <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
                           <Image
                             src="/trados-logo.svg"
                             alt="AI"
-                            width={18}
-                            height={18}
-                            className="opacity-90 animate-pulse"
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 animate-pulse"
                           />
                         </div>
                         <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-[#2a2a2a]">
@@ -721,28 +764,46 @@ export default function Home() {
               <div className="flex-shrink-0 border-t border-white/10 bg-[#212121] px-4 py-4">
                 <div className="w-full max-w-4xl mx-auto">
                   {/* File Preview */}
-                  {files && files.length > 0 && (
+                  {files.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {Array.from(files).map((file, index) => (
+                      {files.map((file, index) => (
                         <div
                           key={index}
-                          className="flex items-center gap-2 bg-[#2f2f2f] rounded-lg px-3 py-2 text-sm"
+                          className="relative group bg-[#2f2f2f] rounded-lg overflow-hidden"
                         >
                           {file.type.startsWith("image/") ? (
-                            <ImageIcon className="h-4 w-4 text-white/70" />
+                            // Image thumbnail preview
+                            <div className="relative w-20 h-20">
+                              <Image
+                                src={URL.createObjectURL(file)}
+                                alt={file.name}
+                                fill
+                                className="object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile(index)}
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white/90 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           ) : (
-                            <FileText className="h-4 w-4 text-white/70" />
+                            // PDF/Document preview
+                            <div className="flex items-center gap-2 px-3 py-2 text-sm min-w-[120px]">
+                              <FileText className="h-4 w-4 text-white/70 flex-shrink-0" />
+                              <span className="text-white/90 max-w-[150px] truncate text-xs">
+                                {file.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile(index)}
+                                className="text-white/50 hover:text-white ml-auto"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
                           )}
-                          <span className="text-white/90 max-w-[200px] truncate">
-                            {file.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleRemoveFiles}
-                            className="text-white/50 hover:text-white"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -784,9 +845,9 @@ export default function Home() {
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={isLoading || (!input.trim() && (!files || files.length === 0))}
+                      disabled={isLoading || (!input.trim() && files.length === 0)}
                       className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
-                        input.trim() || (files && files.length > 0)
+                        input.trim() || files.length > 0
                           ? "bg-white text-black hover:bg-white/90"
                           : "bg-white/10 text-white/30 hover:bg-white/20"
                       }`}

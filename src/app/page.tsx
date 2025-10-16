@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2, ArrowUp } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, ImageIcon, MessageSquarePlus, Trash2, ArrowUp, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
@@ -46,6 +46,7 @@ export default function Home() {
   const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
@@ -288,6 +289,17 @@ export default function Home() {
         supportedFiles.forEach(file => dataTransfer.items.add(file));
         setFiles(dataTransfer.files);
       }
+    }
+  };
+
+  // Handle copying message text
+  const handleCopyMessage = async (messageId: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy text:', err);
     }
   };
 
@@ -562,87 +574,118 @@ export default function Home() {
               <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
                 <div className="w-full max-w-4xl mx-auto">
                   <div className="space-y-6">
-                    {messages.map((message) => (
-                      <div key={message.id} className="flex flex-col">
-                        <div
-                          className={`flex items-start gap-3 ${
-                            message.role === "user" ? "justify-end" : ""
-                          }`}
-                        >
-                          {message.role === "assistant" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
-                              <Image
-                                src="/trados-logo.svg"
-                                alt="AI"
-                                width={18}
-                                height={18}
-                                className="opacity-90"
-                              />
-                            </div>
-                          )}
+                    {messages.map((message) => {
+                      const textContent = message.parts
+                        .filter((part) => part.type === "text")
+                        .map((part) => part.text)
+                        .join("\n");
+
+                      return (
+                        <div key={message.id} className="flex flex-col">
                           <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-3 select-text ${
-                              message.role === "user"
-                                ? "bg-[#2f2f2f] text-white"
-                                : "bg-[#2a2a2a] text-white/90"
+                            className={`flex items-start gap-3 ${
+                              message.role === "user" ? "justify-end" : ""
                             }`}
                           >
-                            {/* Render file attachments */}
-                            <div className="space-y-2 mb-2">
-                              {message.parts
-                                .filter((part) => part.type === "file")
-                                .map((part, i) => {
-                                  if (part.mediaType?.startsWith("image/")) {
-                                    return (
-                                      <div key={i} className="rounded-lg overflow-hidden select-none">
-                                        <Image
-                                          src={part.url}
-                                          alt={part.filename || `image-${i}`}
-                                          width={400}
-                                          height={300}
-                                          className="max-w-full h-auto"
-                                        />
-                                      </div>
-                                    );
-                                  }
-                                  if (part.mediaType === "application/pdf") {
-                                    return (
-                                      <div key={i} className="rounded-lg overflow-hidden border border-white/10 select-none">
-                                        <div className="flex items-center gap-2 p-2 bg-[#1a1a1a]">
-                                          <FileText className="h-4 w-4 text-white/70" />
-                                          <span className="text-sm text-white/90">
-                                            {part.filename || `document-${i}.pdf`}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })}
-                            </div>
+                            {message.role === "assistant" && (
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                                <Image
+                                  src="/trados-logo.svg"
+                                  alt="AI"
+                                  width={18}
+                                  height={18}
+                                  className="opacity-90"
+                                />
+                              </div>
+                            )}
+                            <div className="group relative flex flex-col max-w-[80%]">
+                              <div
+                                className={`rounded-2xl px-4 py-3 select-text ${
+                                  message.role === "user"
+                                    ? "bg-[#2f2f2f] text-white"
+                                    : "bg-[#2a2a2a] text-white/90"
+                                }`}
+                              >
+                                {/* Render file attachments */}
+                                <div className="space-y-2 mb-2">
+                                  {message.parts
+                                    .filter((part) => part.type === "file")
+                                    .map((part, i) => {
+                                      if (part.mediaType?.startsWith("image/")) {
+                                        return (
+                                          <div key={i} className="rounded-lg overflow-hidden select-none">
+                                            <Image
+                                              src={part.url}
+                                              alt={part.filename || `image-${i}`}
+                                              width={400}
+                                              height={300}
+                                              className="max-w-full h-auto"
+                                            />
+                                          </div>
+                                        );
+                                      }
+                                      if (part.mediaType === "application/pdf") {
+                                        return (
+                                          <div key={i} className="rounded-lg overflow-hidden border border-white/10 select-none">
+                                            <div className="flex items-center gap-2 p-2 bg-[#1a1a1a]">
+                                              <FileText className="h-4 w-4 text-white/70" />
+                                              <span className="text-sm text-white/90">
+                                                {part.filename || `document-${i}.pdf`}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })}
+                                </div>
 
-                            {/* Render text content */}
-                            <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none select-text [&_*]:select-text">
-                              {message.parts
-                                .filter((part) => part.type === "text")
-                                .map((part, i) => (
-                                  <Streamdown
-                                    key={i}
-                                    isAnimating={status === "streaming"}
-                                  >
-                                    {part.text}
-                                  </Streamdown>
-                                ))}
+                                {/* Render text content */}
+                                <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none select-text [&_*]:select-text">
+                                  {message.parts
+                                    .filter((part) => part.type === "text")
+                                    .map((part, i) => (
+                                      <Streamdown
+                                        key={i}
+                                        isAnimating={status === "streaming"}
+                                      >
+                                        {part.text}
+                                      </Streamdown>
+                                    ))}
+                                </div>
+                              </div>
+
+                              {/* Copy Button */}
+                              {textContent && (
+                                <button
+                                  onClick={() => handleCopyMessage(message.id, textContent)}
+                                  className={`absolute -bottom-8 ${
+                                    message.role === "user" ? "right-0" : "left-0"
+                                  } flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2a2a2a] hover:bg-[#333333] border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-200 text-xs text-white/70 hover:text-white/90`}
+                                >
+                                  {copiedMessageId === message.id ? (
+                                    <>
+                                      <Check className="h-3.5 w-3.5" />
+                                      <span>Copied</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3.5 w-3.5" />
+                                      <span>Copy</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
                             </div>
+                            {message.role === "user" && (
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                                <User className="w-4 h-4 text-white" />
+                              </div>
+                            )}
                           </div>
-                          {message.role === "user" && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
-                              <User className="w-4 h-4 text-white" />
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {/* Only show thinking bubble when loading and no streaming message */}
                     {isLoading && status === "submitted" && (
                       <div className="flex items-start gap-3">

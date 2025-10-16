@@ -45,8 +45,10 @@ export default function Home() {
   const [files, setFiles] = useState<FileList | undefined>(undefined);
   const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
+  const dragCounter = useRef(0);
 
   // Session-aware chat ID management
   const [chatId, setChatId] = useState(() => {
@@ -244,6 +246,51 @@ export default function Home() {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      // Filter for supported file types
+      const supportedFiles = Array.from(droppedFiles).filter(file =>
+        file.type.startsWith('image/') || file.type === 'application/pdf'
+      );
+
+      if (supportedFiles.length > 0) {
+        const dataTransfer = new DataTransfer();
+        supportedFiles.forEach(file => dataTransfer.items.add(file));
+        setFiles(dataTransfer.files);
+      }
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -372,7 +419,13 @@ export default function Home() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex flex-1 flex-col relative z-10 min-h-0">
+      <main
+        className="flex flex-1 flex-col relative z-10 min-h-0"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {/* Top Bar with Toggle */}
         <div className="relative flex h-12 flex-shrink-0 items-center bg-[#212121] px-3 border-b border-white/5">
           {/* Subtle gradient overlay for header */}
@@ -388,6 +441,19 @@ export default function Home() {
             <span className="sr-only">Toggle sidebar</span>
           </Button>
         </div>
+
+        {/* Drag and Drop Overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 bg-[#212121]/95 backdrop-blur-sm border-4 border-dashed border-[#8353fd] rounded-lg m-4 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#8353fd] to-[#e60054] flex items-center justify-center">
+                <Plus className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-2xl font-semibold text-white mb-2">Drop files here</h3>
+              <p className="text-white/60">Upload images or PDF documents</p>
+            </div>
+          </div>
+        )}
 
         {/* Chat Area */}
         <div className="flex-1 flex flex-col relative overflow-hidden">
@@ -515,7 +581,7 @@ export default function Home() {
                             </div>
                           )}
                           <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                            className={`max-w-[80%] rounded-2xl px-4 py-3 select-text ${
                               message.role === "user"
                                 ? "bg-[#2f2f2f] text-white"
                                 : "bg-[#2a2a2a] text-white/90"
@@ -528,7 +594,7 @@ export default function Home() {
                                 .map((part, i) => {
                                   if (part.mediaType?.startsWith("image/")) {
                                     return (
-                                      <div key={i} className="rounded-lg overflow-hidden">
+                                      <div key={i} className="rounded-lg overflow-hidden select-none">
                                         <Image
                                           src={part.url}
                                           alt={part.filename || `image-${i}`}
@@ -541,7 +607,7 @@ export default function Home() {
                                   }
                                   if (part.mediaType === "application/pdf") {
                                     return (
-                                      <div key={i} className="rounded-lg overflow-hidden border border-white/10">
+                                      <div key={i} className="rounded-lg overflow-hidden border border-white/10 select-none">
                                         <div className="flex items-center gap-2 p-2 bg-[#1a1a1a]">
                                           <FileText className="h-4 w-4 text-white/70" />
                                           <span className="text-sm text-white/90">
@@ -556,7 +622,7 @@ export default function Home() {
                             </div>
 
                             {/* Render text content */}
-                            <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none">
+                            <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none select-text [&_*]:select-text">
                               {message.parts
                                 .filter((part) => part.type === "text")
                                 .map((part, i) => (

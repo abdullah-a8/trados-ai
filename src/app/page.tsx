@@ -342,7 +342,7 @@ export default function Home() {
           <div className="flex items-center gap-3 border-b border-white/10 p-4">
             <Image
               src="/trados-logo.svg"
-              alt="TRADOS Logo"
+              alt="TRADOS by GLI Logo"
               width={28}
               height={28}
               className="h-7 w-7"
@@ -465,7 +465,7 @@ export default function Home() {
                 <div className="text-center mb-8 -mt-16">
                   <Image
                     src="/trados-logo.svg"
-                    alt="TRADOS Logo"
+                    alt="TRADOS by GLI Logo"
                     width={64}
                     height={64}
                     className="mx-auto mb-6 h-16 w-16 opacity-60"

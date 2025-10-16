@@ -1,9 +1,9 @@
 /**
- * AI Model configuration for TRADOS AI
- * 
+ * AI Model configuration for TRADOS by GLI
+ *
  * Using gpt-4o (optimized) for faster vision processing
  * gpt-4o is significantly faster than gpt-4 for image tasks while maintaining quality
- * 
+ *
  * Model options (from fastest to most capable):
  * - 'gpt-4o-mini' - Fastest, cheapest, good for simple tasks
  * - 'gpt-4o' - Balanced speed and quality (RECOMMENDED)

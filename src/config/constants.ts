@@ -1,8 +1,8 @@
 /**
- * Application-wide constants for TRADOS AI
+ * Application-wide constants for TRADOS by GLI
  */
 
-export const APP_NAME = 'TRADOS AI';
+export const APP_NAME = 'TRADOS by GLI';
 
 export const APP_DESCRIPTION = 'Professional translation and transcription assistant';
 

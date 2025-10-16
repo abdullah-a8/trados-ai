@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TRADOS AI - Translation & Transcription Assistant",
+  title: "TRADOS by GLI - Translation & Transcription Assistant",
   description: "AI-powered translation and transcription tool for professional translation agencies",
   icons: {
     icon: '/trados-logo.svg',

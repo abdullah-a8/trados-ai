@@ -13,7 +13,7 @@ export const UI_CONFIG = {
   },
   chat: {
     maxWidth: '48rem',
-    inputPlaceholder: 'Ask me to translate something...',
+    inputPlaceholder: 'Assigner une tâche',
     welcomeMessage: 'What can I help you translate today?',
   },
 } as const;

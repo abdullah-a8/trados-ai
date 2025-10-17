@@ -325,6 +325,29 @@ export default function Home() {
     }
   };
 
+  // Handle manual text selection copy - intercept and provide clean HTML
+  const handleManualCopy = async (e: React.ClipboardEvent) => {
+    e.preventDefault();
+
+    const selection = window.getSelection();
+    if (!selection || selection.toString().trim() === '') return;
+
+    const selectedText = selection.toString();
+
+    try {
+      // Convert the selected markdown text to clean HTML
+      const htmlContent = await marked(selectedText);
+
+      // Set clipboard data with both HTML and plain text
+      e.clipboardData.setData('text/html', htmlContent);
+      e.clipboardData.setData('text/plain', selectedText);
+    } catch (err) {
+      console.error('Failed to process copy:', err);
+      // Fallback to plain text
+      e.clipboardData.setData('text/plain', selectedText);
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -641,9 +664,10 @@ export default function Home() {
                                 />
                               </div>
                             )}
-                            <div className="group relative flex flex-col max-w-[80%]">
+                            <div className="group relative flex flex-col max-w-[80%] min-w-0">
                               <div
-                                className={`rounded-2xl px-4 py-3 select-text ${
+                                onCopy={handleManualCopy}
+                                className={`rounded-2xl px-4 py-3 select-text overflow-hidden ${
                                   message.role === "user"
                                     ? "bg-[#2f2f2f] text-white"
                                     : "bg-[#2a2a2a] text-white/90"
@@ -683,8 +707,8 @@ export default function Home() {
                                     })}
                                 </div>
 
-                                {/* Render text content */}
-                                <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none select-text [&_*]:select-text">
+                                {/* Render text content - with proper overflow handling */}
+                                <div className="text-[15px] leading-relaxed prose prose-invert prose-sm max-w-none select-text [&_*]:select-text overflow-x-auto">
                                   {message.parts
                                     .filter((part) => part.type === "text")
                                     .map((part, i) => (

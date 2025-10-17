@@ -266,21 +266,52 @@
     margin: 0.5em 0;
   }
 
+  /* Table wrapper for horizontal overflow - ChatGPT style */
   .prose table {
     width: 100%;
     border-collapse: collapse;
     margin: 1em 0;
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  /* Ensure table stays contained */
+  .prose thead,
+  .prose tbody,
+  .prose tr {
+    display: table;
+    width: 100%;
+    table-layout: auto;
   }
 
   .prose th, .prose td {
     border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 0.5em;
     text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .prose th {
     background: rgba(131, 83, 253, 0.2);
     font-weight: 600;
+  }
+
+  /* Add scrollbar styling for table overflow */
+  .prose table::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .prose table::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  .prose table::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #8353fd 0%, #e60054 100%);
+    border-radius: 4px;
   }
 
   .prose img {

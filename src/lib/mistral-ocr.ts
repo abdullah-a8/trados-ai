@@ -27,12 +27,16 @@ export async function extractTextFromImage(
   mediaType: string
 ): Promise<string> {
   try {
-    console.log(`[Mistral OCR] Processing image (${mediaType})...`);
+    console.log(`[Mistral OCR] 📸 Processing image (${mediaType})...`);
+    console.log(`[Mistral OCR] 📊 Image data length: ${imageData.length} characters`);
+    console.log(`[Mistral OCR] 🔑 API Key configured: ${!!process.env.MISTRAL_API_KEY}`);
 
     // Construct data URL for Mistral OCR API
     const dataUrl = `data:${mediaType};base64,${imageData}`;
+    console.log(`[Mistral OCR] 🔗 Data URL prefix: ${dataUrl.substring(0, 50)}...`);
 
     // Process OCR using Mistral API
+    console.log(`[Mistral OCR] 🚀 Sending request to Mistral API...`);
     const ocrResponse = await client.ocr.process({
       model: 'mistral-ocr-latest',
       document: {
@@ -42,6 +46,10 @@ export async function extractTextFromImage(
       includeImageBase64: false, // We don't need the image back
     });
 
+    console.log(`[Mistral OCR] 📥 Received response from Mistral API`);
+    console.log(`[Mistral OCR] 📄 Pages in response: ${ocrResponse.pages?.length || 0}`);
+    console.log(`[Mistral OCR] 🔍 Full response structure:`, JSON.stringify(ocrResponse, null, 2));
+
     // Extract markdown text from response
     // The OCR response contains pages array with markdown content
     const extractedText = ocrResponse.pages
@@ -49,11 +57,16 @@ export async function extractTextFromImage(
       .filter(Boolean)
       .join('\n\n') || '';
 
-    console.log(`[Mistral OCR] ✅ Extracted ${extractedText.length} characters`);
+    console.log(`[Mistral OCR] ✅ Successfully extracted ${extractedText.length} characters`);
+    console.log(`[Mistral OCR] 📝 First 200 chars of extracted text:`, extractedText.substring(0, 200));
 
     return extractedText;
   } catch (error) {
-    console.error('[Mistral OCR] Error processing image:', error);
+    console.error('[Mistral OCR] ❌ Error processing image:', error);
+    if (error instanceof Error) {
+      console.error('[Mistral OCR] ❌ Error message:', error.message);
+      console.error('[Mistral OCR] ❌ Error stack:', error.stack);
+    }
     throw new Error(
       `OCR processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -70,12 +83,15 @@ export async function extractTextFromPDF(
   pdfData: string
 ): Promise<string> {
   try {
-    console.log('[Mistral OCR] Processing PDF document...');
+    console.log('[Mistral OCR] 📄 Processing PDF document...');
+    console.log(`[Mistral OCR] 📊 PDF data length: ${pdfData.length} characters`);
 
     // Construct data URL for PDF
     const dataUrl = `data:application/pdf;base64,${pdfData}`;
+    console.log(`[Mistral OCR] 🔗 Data URL prefix: ${dataUrl.substring(0, 50)}...`);
 
     // Process OCR using Mistral API
+    console.log(`[Mistral OCR] 🚀 Sending PDF request to Mistral API...`);
     const ocrResponse = await client.ocr.process({
       model: 'mistral-ocr-latest',
       document: {
@@ -84,6 +100,10 @@ export async function extractTextFromPDF(
       },
       includeImageBase64: false,
     });
+
+    console.log(`[Mistral OCR] 📥 Received PDF response from Mistral API`);
+    console.log(`[Mistral OCR] 📄 Pages in response: ${ocrResponse.pages?.length || 0}`);
+    console.log(`[Mistral OCR] 🔍 Full response structure:`, JSON.stringify(ocrResponse, null, 2));
 
     // Extract markdown text from all pages
     const extractedText = ocrResponse.pages
@@ -94,11 +114,16 @@ export async function extractTextFromPDF(
       .filter(Boolean)
       .join('\n\n---\n\n') || '';
 
-    console.log(`[Mistral OCR] ✅ Extracted text from ${ocrResponse.pages?.length || 0} pages`);
+    console.log(`[Mistral OCR] ✅ Successfully extracted text from ${ocrResponse.pages?.length || 0} pages`);
+    console.log(`[Mistral OCR] 📝 First 200 chars of extracted text:`, extractedText.substring(0, 200));
 
     return extractedText;
   } catch (error) {
-    console.error('[Mistral OCR] Error processing PDF:', error);
+    console.error('[Mistral OCR] ❌ Error processing PDF:', error);
+    if (error instanceof Error) {
+      console.error('[Mistral OCR] ❌ Error message:', error.message);
+      console.error('[Mistral OCR] ❌ Error stack:', error.stack);
+    }
     throw new Error(
       `PDF OCR processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -119,21 +144,34 @@ export async function extractTextFromMultipleFiles(
   }>
 ): Promise<string> {
   try {
-    console.log(`[Mistral OCR] Processing ${files.length} file(s) in parallel...`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[Mistral OCR] 📦 Starting batch processing of ${files.length} file(s)`);
+    console.log(`${'='.repeat(80)}`);
+
+    files.forEach((file, index) => {
+      console.log(`[Mistral OCR] 📋 File ${index + 1}/${files.length}:`);
+      console.log(`  - Media Type: ${file.mediaType}`);
+      console.log(`  - Filename: ${file.filename || 'N/A'}`);
+      console.log(`  - Data length: ${file.data.length} characters`);
+    });
 
     // Process all files in parallel for better performance
     const results = await Promise.all(
       files.map(async (file, index) => {
         try {
+          console.log(`\n[Mistral OCR] 🔄 Processing file ${index + 1}/${files.length} (${file.mediaType})...`);
+
           // Route to appropriate processor based on media type
           let extractedText: string;
 
           if (file.mediaType === 'application/pdf') {
+            console.log(`[Mistral OCR] 📄 Routing to PDF processor...`);
             extractedText = await extractTextFromPDF(file.data);
           } else if (file.mediaType.startsWith('image/')) {
+            console.log(`[Mistral OCR] 🖼️  Routing to image processor...`);
             extractedText = await extractTextFromImage(file.data, file.mediaType);
           } else {
-            console.warn(`[Mistral OCR] Unsupported media type: ${file.mediaType}`);
+            console.warn(`[Mistral OCR] ⚠️  Unsupported media type: ${file.mediaType}`);
             return null;
           }
 
@@ -141,9 +179,10 @@ export async function extractTextFromMultipleFiles(
           const docNumber = index + 1;
           const filename = file.filename || `Document ${docNumber}`;
 
+          console.log(`[Mistral OCR] ✅ Successfully processed file ${index + 1}/${files.length}`);
           return `### Document ${docNumber}: ${filename}\n\n${extractedText}`;
         } catch (error) {
-          console.error(`[Mistral OCR] Failed to process file ${index + 1}:`, error);
+          console.error(`[Mistral OCR] ❌ Failed to process file ${index + 1}/${files.length}:`, error);
           // Return error message instead of failing entire batch
           return `### Document ${index + 1}: [OCR Error]\n\nFailed to extract text from this document.`;
         }
@@ -155,11 +194,15 @@ export async function extractTextFromMultipleFiles(
       .filter(Boolean)
       .join('\n\n---\n\n');
 
-    console.log(`[Mistral OCR] ✅ Successfully processed ${files.length} file(s)`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[Mistral OCR] ✅ Batch processing complete!`);
+    console.log(`[Mistral OCR] 📊 Successfully processed: ${files.length} file(s)`);
+    console.log(`[Mistral OCR] 📝 Total extracted text length: ${combinedText.length} characters`);
+    console.log(`${'='.repeat(80)}\n`);
 
     return combinedText;
   } catch (error) {
-    console.error('[Mistral OCR] Batch processing error:', error);
+    console.error('[Mistral OCR] ❌ Batch processing error:', error);
     throw new Error(
       `Batch OCR processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );

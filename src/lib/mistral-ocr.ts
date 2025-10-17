@@ -40,7 +40,6 @@ export async function extractTextFromImage(
     const ocrResponse = await client.ocr.process({
       model: 'mistral-ocr-latest',
       document: {
-        type: 'image_url',
         imageUrl: dataUrl,
       },
       includeImageBase64: false, // We don't need the image back
@@ -95,7 +94,6 @@ export async function extractTextFromPDF(
     const ocrResponse = await client.ocr.process({
       model: 'mistral-ocr-latest',
       document: {
-        type: 'document_url',
         documentUrl: dataUrl,
       },
       includeImageBase64: false,

@@ -30,6 +30,13 @@ export async function POST(req: Request) {
       id: string;
     } = await req.json();
 
+    // DEBUG: Log incoming message structure
+    console.log('\n🔍 [DEBUG] Incoming message structure:', JSON.stringify(message, null, 2));
+    console.log('🔍 [DEBUG] Message role:', message.role);
+    console.log('🔍 [DEBUG] Message has parts:', 'parts' in message);
+    console.log('🔍 [DEBUG] Message parts type:', typeof message.parts);
+    console.log('🔍 [DEBUG] Message parts is array:', Array.isArray(message.parts));
+
     // Load previous messages from Redis (with timeout handling)
     let previousMessages: UIMessage[];
     try {

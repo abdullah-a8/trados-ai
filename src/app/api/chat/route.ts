@@ -8,6 +8,11 @@ import {
 import { TRADOS_SYSTEM_PROMPT } from '@/config/prompts';
 import { MODEL_CONFIG } from '@/config/model';
 import { loadChat, saveChat } from '@/lib/chat-store';
+import {
+  extractTextFromMultipleFiles,
+  shouldProcessWithOCR,
+  extractBase64FromDataURL
+} from '@/lib/mistral-ocr';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -42,26 +47,98 @@ export async function POST(req: Request) {
     // Combine previous messages with the new message
     const allMessages = [...previousMessages, message];
 
-    // Convert UI messages to model format, transforming file parts to image parts for vision models
+    // ========================================
+    // MISTRAL OCR PREPROCESSING
+    // ========================================
+    // Extract files that need OCR processing from the new message
+    const filesForOCR: Array<{
+      data: string;
+      mediaType: string;
+      filename?: string;
+    }> = [];
+
+    if (Array.isArray(message.parts)) {
+      message.parts.forEach((part: { type?: string; mediaType?: string; url?: string; filename?: string }) => {
+        if (part.type === 'file' && part.mediaType && part.url && shouldProcessWithOCR(part.mediaType)) {
+          try {
+            // Extract base64 data from data URL
+            const base64Data = extractBase64FromDataURL(part.url);
+            filesForOCR.push({
+              data: base64Data,
+              mediaType: part.mediaType,
+              filename: part.filename,
+            });
+          } catch (error) {
+            console.error('[OCR Pipeline] Failed to extract file data:', error);
+          }
+        }
+      });
+    }
+
+    // Process files with Mistral OCR if any were found
+    let ocrExtractedText = '';
+    if (filesForOCR.length > 0) {
+      try {
+        console.log(`[OCR Pipeline] Processing ${filesForOCR.length} file(s) with Mistral OCR...`);
+        ocrExtractedText = await extractTextFromMultipleFiles(filesForOCR);
+        console.log(`[OCR Pipeline] ✅ OCR completed successfully`);
+      } catch (error) {
+        console.error('[OCR Pipeline] OCR processing failed:', error);
+        // Continue without OCR - will fallback to vision model
+        ocrExtractedText = '';
+      }
+    }
+
+    // Convert UI messages to model format
+    // If OCR extracted text, replace file parts with text content for GPT-4o
     const modelMessages = convertToModelMessages(allMessages).map(msg => {
-      // Only process user messages with content arrays
+      // Only process the last user message (which we just received)
+      if (msg.role === 'user' && Array.isArray(msg.content) && msg === convertToModelMessages([message])[0]) {
+        // Filter out file parts that were processed by OCR
+        const nonOCRParts = msg.content.filter((part: { type?: string; mediaType?: string }) => {
+          if (part.type === 'file' && part.mediaType && shouldProcessWithOCR(part.mediaType)) {
+            return false; // Remove OCR-processed files
+          }
+          return true;
+        });
+
+        // If we have OCR extracted text, add it to the message content
+        if (ocrExtractedText) {
+          return {
+            ...msg,
+            content: [
+              ...nonOCRParts,
+              {
+                type: 'text' as const,
+                text: `\n\n[Extracted Document Text via OCR]:\n\n${ocrExtractedText}`,
+              }
+            ]
+          };
+        }
+
+        return {
+          ...msg,
+          content: nonOCRParts
+        };
+      }
+
+      // For historical messages or non-user messages, keep vision capability
       if (msg.role === 'user' && Array.isArray(msg.content)) {
         return {
           ...msg,
           content: msg.content.map((part) => {
-            // Convert file parts with image media types to image parts for GPT-4o vision
-            // FilePart has: { type: 'file', data: DataContent | URL, mediaType: string }
-            // ImagePart needs: { type: 'image', image: DataContent | URL }
-            if (part.type === 'file' && 'mediaType' in part && typeof part.mediaType === 'string' && part.mediaType.startsWith('image/')) {
+            // Convert file parts with image media types to image parts for GPT-4o vision (fallback)
+            if (part.type === 'file' && part.mediaType && part.mediaType.startsWith('image/')) {
               return {
                 type: 'image' as const,
-                image: 'data' in part ? part.data : part,
+                image: part.data,
               };
             }
             return part;
           })
         };
       }
+
       return msg;
     });
 

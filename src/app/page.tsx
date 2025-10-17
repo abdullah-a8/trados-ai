@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { API_ROUTES, UI_CONFIG, APP_NAME } from "@/config/constants";
+import { API_ROUTES, UI_CONFIG } from "@/config/constants";
 import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";

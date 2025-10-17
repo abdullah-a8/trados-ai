@@ -464,18 +464,16 @@ export default function Home() {
             </span>
           </div>
 
-          {/* New Chat Button */}
-          <div className="p-2 border-b border-white/10">
-            <Button
-              onClick={handleNewChat}
-              className="w-full h-10 bg-white/5 hover:bg-white/10 text-white border border-white/10 flex items-center justify-center gap-2"
-            >
-              <MessageSquarePlus className="h-4 w-4" />
-              <span>New Chat</span>
-            </Button>
-          </div>
-
-          {/* Chat History */}
+{/* New Chat Button */}
+<div className="p-2 border-b border-white/10">
+  <Button
+    onClick={handleNewChat}
+    className="w-full h-10 bg-white/5 hover:bg-white/10 text-white border border-white/10 flex items-center justify-center gap-2"
+  >
+    <MessageSquarePlus className="h-4 w-4" />
+    <span>New Task</span>
+  </Button>
+</div>          {/* Chat History */}
           <div className="flex-1 overflow-y-auto p-2">
             {isLoadingHistory ? (
               <div className="text-sm text-white/50 p-3 text-center">

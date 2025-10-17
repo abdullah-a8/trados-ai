@@ -326,25 +326,62 @@ export default function Home() {
   };
 
   // Handle manual text selection copy - intercept and provide clean HTML
-  const handleManualCopy = async (e: React.ClipboardEvent) => {
+  const handleManualCopy = (e: React.ClipboardEvent) => {
     e.preventDefault();
 
     const selection = window.getSelection();
-    if (!selection || selection.toString().trim() === '') return;
-
-    const selectedText = selection.toString();
+    if (!selection || selection.rangeCount === 0) return;
 
     try {
-      // Convert the selected markdown text to clean HTML
-      const htmlContent = await marked(selectedText);
+      // Get the HTML content from the selection
+      const range = selection.getRangeAt(0);
+      const fragment = range.cloneContents();
 
-      // Set clipboard data with both HTML and plain text
-      e.clipboardData.setData('text/html', htmlContent);
-      e.clipboardData.setData('text/plain', selectedText);
+      // Create a temporary container
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(fragment);
+
+      // Function to recursively clean styles from elements
+      const cleanElement = (element: Element) => {
+        // Remove unwanted inline styles but keep the element structure
+        if (element instanceof HTMLElement) {
+          // Remove specific style properties that cause issues
+          element.style.removeProperty('background-color');
+          element.style.removeProperty('background');
+          element.style.removeProperty('color');
+          element.style.removeProperty('border');
+          element.style.removeProperty('border-color');
+          element.style.removeProperty('padding');
+          element.style.removeProperty('margin');
+
+          // If no styles remain, remove the style attribute entirely
+          if (element.style.length === 0) {
+            element.removeAttribute('style');
+          }
+
+          // Remove class attributes that contain styling
+          element.removeAttribute('class');
+        }
+
+        // Recursively clean child elements
+        Array.from(element.children).forEach(child => cleanElement(child));
+      };
+
+      // Clean all elements in the selection
+      Array.from(tempDiv.children).forEach(child => cleanElement(child));
+
+      // Get the cleaned HTML
+      const cleanedHtml = tempDiv.innerHTML;
+      const plainText = selection.toString();
+
+      // Set clipboard data with both formats
+      e.clipboardData.setData('text/html', cleanedHtml);
+      e.clipboardData.setData('text/plain', plainText);
     } catch (err) {
       console.error('Failed to process copy:', err);
       // Fallback to plain text
-      e.clipboardData.setData('text/plain', selectedText);
+      const plainText = selection.toString();
+      e.clipboardData.setData('text/plain', plainText);
     }
   };
 

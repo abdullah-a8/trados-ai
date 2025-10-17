@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -410,12 +410,27 @@ export default function Home() {
   // Auto-scroll to bottom when new messages arrive
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Memoize file preview URLs to prevent flickering on re-renders
+  const filePreviewUrls = useMemo(() => {
+    return files.map(file => ({
+      file,
+      url: URL.createObjectURL(file)
+    }));
+  }, [files]);
+
+  // Cleanup object URLs when they change
+  useEffect(() => {
+    return () => {
+      filePreviewUrls.forEach(({ url }) => URL.revokeObjectURL(url));
+    };
+  }, [filePreviewUrls]);
 
   return (
     <div className="flex h-screen w-screen bg-[#212121] text-white relative overflow-hidden fixed inset-0">
@@ -577,7 +592,7 @@ export default function Home() {
                   {/* File Preview */}
                   {files.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {files.map((file, index) => (
+                      {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
                           className="relative group bg-[#2f2f2f] rounded-lg overflow-hidden"
@@ -586,7 +601,7 @@ export default function Home() {
                             // Image thumbnail preview
                             <div className="relative w-20 h-20">
                               <Image
-                                src={URL.createObjectURL(file)}
+                                src={url}
                                 alt={file.name}
                                 fill
                                 className="object-cover"
@@ -827,7 +842,7 @@ export default function Home() {
                   {/* File Preview */}
                   {files.length > 0 && (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {files.map((file, index) => (
+                      {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
                           className="relative group bg-[#2f2f2f] rounded-lg overflow-hidden"
@@ -836,7 +851,7 @@ export default function Home() {
                             // Image thumbnail preview
                             <div className="relative w-20 h-20">
                               <Image
-                                src={URL.createObjectURL(file)}
+                                src={url}
                                 alt={file.name}
                                 fill
                                 className="object-cover"

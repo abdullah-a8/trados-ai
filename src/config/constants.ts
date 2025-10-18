@@ -13,8 +13,8 @@ export const UI_CONFIG = {
   },
   chat: {
     maxWidth: '48rem',
-    inputPlaceholder: 'Assigner une tâche',
-    welcomeMessage: 'What can I help you translate today?',
+    inputPlaceholder: 'Assign a task',
+    welcomeMessage: `The next-generation tool for professional translation and transcription, built on the principles of Trados's workflow.`,
   },
 } as const;
 

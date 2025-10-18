@@ -59,10 +59,10 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#8353fd] to-[#e60054] mb-2">
-            TRADOS by GLI
+            TRADOS <span className="text-xl">by</span> GLI
           </h1>
           <p className="text-white/60 text-sm text-center">
-            Professional Translation & Transcription Assistant
+            Professional Translation & Transcription Tool
           </p>
         </div>
 

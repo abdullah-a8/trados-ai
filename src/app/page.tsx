@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
@@ -41,6 +42,7 @@ async function convertFilesToDataURLs(files: FileList) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -48,6 +50,7 @@ export default function Home() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
@@ -230,6 +233,26 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Failed to delete chat:', error);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        // Redirect to login page
+        router.push('/login');
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Failed to logout:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -481,7 +504,7 @@ export default function Home() {
               </div>
             ) : chatHistory.length === 0 ? (
               <div className="text-sm text-white/50 p-3 text-center">
-                No chat history yet
+                No tasks history yet
               </div>
             ) : (
               <div className="space-y-1">
@@ -519,11 +542,23 @@ export default function Home() {
 
           {/* Current Session Info */}
           <div className="p-3 border-t border-white/10">
-            <div className="text-xs text-white/50">
+            <div className="text-xs text-white/50 mb-3">
               <p className="font-medium mb-1">Current Session</p>
               <p className="truncate">ID: {chatId.slice(0, 8)}...</p>
               <p className="mt-0.5">Messages: {messages.length}</p>
             </div>
+
+            {/* Logout Button */}
+            <Button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full h-9 bg-gradient-to-r from-[#8353fd] to-[#e60054] hover:from-[#6942ca] hover:to-[#eb3376] text-white border-0 flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {isLoggingOut ? 'Logging out...' : 'Logout'}
+              </span>
+            </Button>
           </div>
         </div>
       </aside>
@@ -580,7 +615,7 @@ export default function Home() {
                     height={64}
                     className="mx-auto mb-6 h-16 w-16 opacity-60"
                   />
-                  <h1 className="text-[32px] font-normal text-white/90 mb-6">
+                  <h1 className="text-2xl font-medium text-white/90 mb-6 max-w-3xl mx-auto leading-relaxed">
                     {UI_CONFIG.chat.welcomeMessage}
                   </h1>
                 </div>

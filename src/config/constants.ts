@@ -4,7 +4,7 @@
 
 export const APP_NAME = 'TRADOS by GLI';
 
-export const APP_DESCRIPTION = 'Professional translation and transcription assistant';
+export const APP_DESCRIPTION = 'Professional translation and transcription tool';
 
 export const UI_CONFIG = {
   sidebar: {

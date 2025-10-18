@@ -8,11 +8,6 @@ import {
 import { TRADOS_SYSTEM_PROMPT } from '@/config/prompts';
 import { MODEL_CONFIG } from '@/config/model';
 import { loadChat, saveChat } from '@/lib/chat-store';
-import {
-  extractTextFromMultipleFiles,
-  shouldProcessWithOCR,
-  extractBase64FromDataURL
-} from '@/lib/mistral-ocr';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -54,138 +49,12 @@ export async function POST(req: Request) {
     // Combine previous messages with the new message
     const allMessages = [...previousMessages, message];
 
-    // ========================================
-    // MISTRAL OCR PREPROCESSING
-    // ========================================
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`[OCR Pipeline] 🚀 Starting OCR preprocessing...`);
-    console.log(`${'='.repeat(80)}`);
-
-    // Extract files that need OCR processing from the new message
-    const filesForOCR: Array<{
-      data: string;
-      mediaType: string;
-      filename?: string;
-    }> = [];
-
-    console.log(`[OCR Pipeline] 🔍 Analyzing message parts for OCR-compatible files...`);
-    console.log(`[OCR Pipeline] 📋 Message has parts: ${Array.isArray(message.parts)}`);
-    console.log(`[OCR Pipeline] 📊 Number of parts: ${Array.isArray(message.parts) ? message.parts.length : 0}`);
-
-    if (Array.isArray(message.parts)) {
-      message.parts.forEach((part: { type?: string; mediaType?: string; url?: string; filename?: string }, index: number) => {
-        console.log(`[OCR Pipeline] 🔎 Examining part ${index + 1}:`, {
-          type: part.type,
-          mediaType: part.mediaType,
-          hasUrl: !!part.url,
-          filename: part.filename,
-          urlPrefix: part.url?.substring(0, 50)
-        });
-
-        if (part.type === 'file' && part.mediaType && part.url && shouldProcessWithOCR(part.mediaType)) {
-          console.log(`[OCR Pipeline] ✅ Part ${index + 1} is OCR-compatible (${part.mediaType})`);
-          try {
-            // Extract base64 data from data URL
-            const base64Data = extractBase64FromDataURL(part.url);
-            console.log(`[OCR Pipeline] 📝 Extracted ${base64Data.length} characters of base64 data`);
-            filesForOCR.push({
-              data: base64Data,
-              mediaType: part.mediaType,
-              filename: part.filename,
-            });
-          } catch (error) {
-            console.error('[OCR Pipeline] ❌ Failed to extract file data from part:', error);
-          }
-        } else {
-          console.log(`[OCR Pipeline] ⏭️  Part ${index + 1} skipped (not OCR-compatible)`);
-        }
-      });
-    }
-
-    console.log(`[OCR Pipeline] 📦 Total files to process with OCR: ${filesForOCR.length}`);
-
-    // Process files with Mistral OCR if any were found
-    let ocrExtractedText = '';
-    if (filesForOCR.length > 0) {
-      try {
-        console.log(`[OCR Pipeline] 🚀 Starting Mistral OCR processing for ${filesForOCR.length} file(s)...`);
-        ocrExtractedText = await extractTextFromMultipleFiles(filesForOCR);
-        console.log(`[OCR Pipeline] ✅ OCR completed successfully!`);
-        console.log(`[OCR Pipeline] 📝 Extracted text length: ${ocrExtractedText.length} characters`);
-      } catch (error) {
-        console.error('[OCR Pipeline] ❌ OCR processing failed:', error);
-        if (error instanceof Error) {
-          console.error('[OCR Pipeline] ❌ Error details:', error.message);
-          console.error('[OCR Pipeline] ❌ Stack trace:', error.stack);
-        }
-        // Continue without OCR - will fallback to vision model
-        console.log('[OCR Pipeline] ⚠️  Continuing without OCR (fallback to vision model)');
-        ocrExtractedText = '';
-      }
-    } else {
-      console.log('[OCR Pipeline] ℹ️  No OCR-compatible files found, skipping OCR processing');
-    }
-
-    console.log(`${'='.repeat(80)}\n`);
-
-    // Convert UI messages to model format
-    // If OCR extracted text, replace file parts with text content for GPT-4o
-    const modelMessages = convertToModelMessages(allMessages).map(msg => {
-      // Only process the last user message (which we just received)
-      if (msg.role === 'user' && Array.isArray(msg.content) && msg === convertToModelMessages([message])[0]) {
-        // Filter out file parts that were processed by OCR
-        const nonOCRParts = msg.content.filter((part: { type?: string; mediaType?: string }) => {
-          if (part.type === 'file' && part.mediaType && shouldProcessWithOCR(part.mediaType)) {
-            return false; // Remove OCR-processed files
-          }
-          return true;
-        });
-
-        // If we have OCR extracted text, add it to the message content
-        if (ocrExtractedText) {
-          return {
-            ...msg,
-            content: [
-              ...nonOCRParts,
-              {
-                type: 'text' as const,
-                text: `\n\n[Extracted Document Text via OCR]:\n\n${ocrExtractedText}`,
-              }
-            ]
-          };
-        }
-
-        return {
-          ...msg,
-          content: nonOCRParts
-        };
-      }
-
-      // For historical messages or non-user messages, keep vision capability
-      if (msg.role === 'user' && Array.isArray(msg.content)) {
-        return {
-          ...msg,
-          content: msg.content.map((part) => {
-            // Convert file parts with image media types to image parts for GPT-4o vision (fallback)
-            if (part.type === 'file' && part.mediaType && part.mediaType.startsWith('image/')) {
-              return {
-                type: 'image' as const,
-                image: part.data,
-              };
-            }
-            return part;
-          })
-        };
-      }
-
-      return msg;
-    });
-
-    // Stream the AI response
+    // Stream the AI response with GPT-4o vision support
+    // convertToModelMessages automatically handles file-to-image conversion for vision models
     const result = streamText({
       model: openai(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
-      messages: modelMessages,
+      messages: convertToModelMessages(allMessages),
     });
 
     // Return streaming response with persistence

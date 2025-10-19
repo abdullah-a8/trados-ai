@@ -14,7 +14,7 @@ export const UI_CONFIG = {
   chat: {
     maxWidth: '48rem',
     inputPlaceholder: 'Assign a task',
-    welcomeMessage: `The next-generation tool for professional translation and transcription, built on the principles of Trados's workflow.`,
+    welcomeMessage: `The next-generation tool for professional translation and transcription, built on the principles of TRADOS`,
   },
 } as const;
 

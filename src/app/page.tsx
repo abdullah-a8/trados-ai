@@ -615,8 +615,9 @@ export default function Home() {
                     height={64}
                     className="mx-auto mb-6 h-16 w-16 opacity-60"
                   />
-                  <h1 className="text-lg font-medium text-white/90 mb-6 max-w-3xl mx-auto leading-relaxed">
-                    {UI_CONFIG.chat.welcomeMessage}
+                  <h1 className="text-lg font-medium text-white/90 mb-6 max-w-3xl mx-auto leading-relaxed whitespace-nowrap">
+                    The next-generation tool for professional translation and transcription, built on the principles of{' '}
+                    <span className="text-xl font-semibold">TRADOS</span>
                   </h1>
                 </div>
 

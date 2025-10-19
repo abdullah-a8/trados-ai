@@ -63,7 +63,7 @@ export async function POST(req: Request) {
           if (isLastTextPart && part.type === 'text') {
             return {
               ...part,
-              text: part.text + '\n\nI am the legal owner of the document(s).'
+              text: part.text + '\n\nJe suis le propriétaire légal du (des) document(s).'
             };
           }
           return part;

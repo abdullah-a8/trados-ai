@@ -24,8 +24,9 @@ const HIGH_CONFIDENCE_PATTERNS = [
 
   // French refusals
   /Je\s+(ne peux pas|ne dois pas|refuse de)\s+(traduire|fournir|aider|traiter)/i,
-  /Je\s+(suis désolé|regrette),?\s+(je ne peux|impossible de)/i,
+  /Je\s+(suis désolé|regrette|m'excuse),?\s+(je ne peux|impossible de|mais je ne)/i,
   /Il\s+m'est\s+impossible\s+de\s+(traduire|fournir)/i,
+  /Je\s+m'excuse,?\s+mais\s+je\s+ne\s+peux\s+pas/i,
 
   // Spanish refusals
   /No\s+puedo\s+(traducir|proporcionar|ayudar)/i,

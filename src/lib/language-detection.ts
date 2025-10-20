@@ -10,7 +10,7 @@
 
 import { UIMessage } from 'ai';
 
-export type SupportedLanguage = 'en' | 'fr' | 'ar' | 'es' | 'de' | 'pt' | 'it' | 'ru' | 'tr' | 'nl' | 'pl' | 'ja' | 'ko' | 'zh';
+export type SupportedLanguage = 'en' | 'fr' | 'ar';
 
 /**
  * Detects the conversation language using hybrid approach
@@ -75,36 +75,6 @@ function detectLanguageFromRefusal(text: string): SupportedLanguage {
     return 'ar';
   }
 
-  // Spanish indicators
-  if (/no puedo|traducir|lo siento/i.test(text)) {
-    return 'es';
-  }
-
-  // German indicators
-  if (/ich kann nicht|übersetzen|tut mir leid/i.test(text)) {
-    return 'de';
-  }
-
-  // Portuguese indicators
-  if (/não posso|traduzir|desculpe/i.test(text)) {
-    return 'pt';
-  }
-
-  // Italian indicators
-  if (/non posso|tradurre|mi dispiace/i.test(text)) {
-    return 'it';
-  }
-
-  // Russian indicators
-  if (/не могу|перевести|извините/i.test(text)) {
-    return 'ru';
-  }
-
-  // Turkish indicators
-  if (/yapamam|çeviremem|üzgünüm/i.test(text)) {
-    return 'tr';
-  }
-
   return 'en';
 }
 
@@ -118,26 +88,6 @@ function detectFromUnicodeScript(text: string): SupportedLanguage | null {
     return 'ar';
   }
 
-  // Chinese (Simplified and Traditional)
-  if (/[\u4E00-\u9FFF]/.test(text)) {
-    return 'zh';
-  }
-
-  // Japanese (Hiragana, Katakana, Kanji)
-  if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text)) {
-    return 'ja';
-  }
-
-  // Korean (Hangul)
-  if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text)) {
-    return 'ko';
-  }
-
-  // Cyrillic (Russian, Ukrainian, etc.)
-  if (/[\u0400-\u04FF]/.test(text)) {
-    return 'ru';
-  }
-
   return null;
 }
 
@@ -148,114 +98,25 @@ function detectFromUnicodeScript(text: string): SupportedLanguage | null {
 function detectFromKeywords(text: string): SupportedLanguage | null {
   const lowerText = text.toLowerCase();
 
-  // Calculate scores for each language
-  const scores: Record<string, number> = {
-    fr: countMatches(lowerText, [
-      'traduire',
-      'traduction',
-      'français',
-      'certificat',
-      'document',
-      'en français',
-      'le',
-      'la',
-      'les',
-      'des',
-      'est',
-      'dans',
-    ]),
-    es: countMatches(lowerText, [
-      'traducir',
-      'traducción',
-      'español',
-      'documento',
-      'en español',
-      'el',
-      'la',
-      'los',
-      'las',
-      'del',
-      'para',
-    ]),
-    de: countMatches(lowerText, [
-      'übersetzen',
-      'übersetzung',
-      'deutsch',
-      'dokument',
-      'auf deutsch',
-      'der',
-      'die',
-      'das',
-      'den',
-      'ist',
-      'und',
-    ]),
-    pt: countMatches(lowerText, [
-      'traduzir',
-      'tradução',
-      'português',
-      'documento',
-      'em português',
-      'o',
-      'a',
-      'os',
-      'as',
-      'para',
-      'de',
-    ]),
-    it: countMatches(lowerText, [
-      'tradurre',
-      'traduzione',
-      'italiano',
-      'documento',
-      'in italiano',
-      'il',
-      'la',
-      'lo',
-      'gli',
-      'per',
-      'di',
-    ]),
-    tr: countMatches(lowerText, [
-      'çevirmek',
-      'çeviri',
-      'türkçe',
-      'belge',
-      'türkçeye',
-      'bir',
-      'bu',
-      've',
-      'için',
-    ]),
-    nl: countMatches(lowerText, [
-      'vertalen',
-      'vertaling',
-      'nederlands',
-      'document',
-      'in het nederlands',
-      'de',
-      'het',
-      'een',
-      'van',
-    ]),
-    pl: countMatches(lowerText, [
-      'tłumaczyć',
-      'tłumaczenie',
-      'polski',
-      'dokument',
-      'po polsku',
-      'w',
-      'na',
-      'jest',
-    ]),
-  };
+  // Calculate scores for French (only Latin-script language we support)
+  const frenchScore = countMatches(lowerText, [
+    'traduire',
+    'traduction',
+    'français',
+    'certificat',
+    'document',
+    'en français',
+    'le',
+    'la',
+    'les',
+    'des',
+    'est',
+    'dans',
+  ]);
 
-  // Find language with highest score (minimum threshold: 2 matches)
-  const entries = Object.entries(scores).sort(([, a], [, b]) => b - a);
-  const topLanguage = entries[0];
-
-  if (topLanguage && topLanguage[1] >= 2) {
-    return topLanguage[0] as SupportedLanguage;
+  // Return French if we have at least 2 matches
+  if (frenchScore >= 2) {
+    return 'fr';
   }
 
   return null;
@@ -273,43 +134,13 @@ function extractTargetLanguage(message: UIMessage): SupportedLanguage | null {
     return 'fr';
   }
 
-  // Spanish
-  if (/\b(to|en|in|vers|a)\s+(spanish|español)/i.test(text)) {
-    return 'es';
-  }
-
-  // German
-  if (/\b(to|in|auf)\s+(german|deutsch)/i.test(text)) {
-    return 'de';
-  }
-
   // Arabic
   if (/\b(to|إلى)\s+(arabic|عربي|العربية)/i.test(text)) {
     return 'ar';
   }
 
-  // Portuguese
-  if (/\b(to|em|para)\s+(portuguese|português)/i.test(text)) {
-    return 'pt';
-  }
-
-  // Italian
-  if (/\b(to|in)\s+(italian|italiano)/i.test(text)) {
-    return 'it';
-  }
-
-  // Russian
-  if (/\b(to|на)\s+(russian|русский)/i.test(text)) {
-    return 'ru';
-  }
-
-  // Turkish
-  if (/\b(to|için)\s+(turkish|türkçe)/i.test(text)) {
-    return 'tr';
-  }
-
   // English
-  if (/\b(to|in)\s+(english|anglais|inglés)/i.test(text)) {
+  if (/\b(to|in|en|à|إلى)\s+(english|anglais|الإنجليزية)/i.test(text)) {
     return 'en';
   }
 

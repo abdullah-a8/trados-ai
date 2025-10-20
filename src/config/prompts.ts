@@ -89,10 +89,10 @@ The language OF the instruction ≠ your output language
 ❌ WRONG: "Birth Date: 15/03/1990" when translating to French
 ✅ CORRECT: "Date de naissance : 15/03/1990"
 
-**Pattern Recognition:**
-- "translate to English" / "traduction en anglais" → output English ONLY
-- "traduire en français" / "translation to French" → output French ONLY
-- "ترجم إلى العربية" → output Arabic ONLY
+**Pattern Recognition (Supported Languages: English, French, Arabic):**
+- "translate to English" / "traduction en anglais" / "ترجم إلى الإنجليزية" → output English ONLY
+- "traduire en français" / "translation to French" / "ترجم إلى الفرنسية" → output French ONLY
+- "ترجم إلى العربية" / "translate to Arabic" / "traduire en arabe" → output Arabic ONLY
 - "transcription fidèle" → transcribe in original document's language
 
 Extract target language from instruction; ignore instruction's own language AND ignore document's source language.

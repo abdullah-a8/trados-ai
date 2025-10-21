@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import {
   streamText,
   convertToModelMessages,
@@ -94,9 +94,9 @@ export async function POST(req: Request) {
         return msg;
       });
 
-      // Stream the AI response with GPT-4o vision support
+      // Stream the AI response with Gemini 2.5 Flash vision support
       const result = streamText({
-        model: openai(MODEL_CONFIG.modelId),
+        model: google(MODEL_CONFIG.modelId),
         system: TRADOS_SYSTEM_PROMPT,
         messages: convertToModelMessages(messagesForModel),
       });

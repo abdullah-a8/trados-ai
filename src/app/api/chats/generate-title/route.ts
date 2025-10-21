@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
 import { updateChatTitle } from '@/lib/chat-store';
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     // Generate a concise title using AI
     const { text: title } = await generateText({
-      model: openai('gpt-4o-mini'), // Use faster, cheaper model for titles
+      model: google('gemini-2.5-flash'), // Use Gemini 2.5 Flash for title generation
       system: 'You are a title generator. Generate a very short, concise title (max 6 words) that captures the main topic of the user\'s message. Only return the title, no quotes or extra text.',
       prompt: `Generate a short title for this message: "${firstMessage}"`,
     });

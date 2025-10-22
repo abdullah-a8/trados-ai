@@ -182,34 +182,47 @@ function calculateOCRConfidence(
   // - Text length (too short = suspicious)
   // - Structure indicators (headings, tables, lists)
   // - Special characters ratio (too high = garbled)
+  // - Word count and readability
 
   const textLength = markdown.trim().length;
   const hasStructure =
     markdown.includes('#') ||
     markdown.includes('|') ||
-    markdown.includes('-') ||
     markdown.includes('**');
+
+  // Count alphanumeric vs special characters (excluding common punctuation and whitespace)
   const specialCharRatio =
-    (markdown.match(/[^a-zA-Z0-9\s\n.,;:!?'"()-]/g) || []).length / textLength;
+    (markdown.match(/[^a-zA-Z0-9\s\n.,;:!?'"()\-–—]/g) || []).length / textLength;
+
+  // Count words (rough approximation)
+  const wordCount = markdown.trim().split(/\s+/).length;
 
   // Confidence logic
-  if (textLength < 20) {
-    return 'low'; // Too short
+  if (textLength < 10) {
+    return 'low'; // Too short - likely failed
   }
 
-  if (specialCharRatio > 0.3) {
+  if (specialCharRatio > 0.4) {
     return 'low'; // Too many special chars (likely garbled)
   }
 
-  if (textLength > 100 && hasStructure) {
-    return 'high'; // Good length and structure
+  // High confidence: good length with structure OR substantial plain text
+  if ((textLength > 100 && hasStructure) || (textLength > 200 && wordCount > 20)) {
+    return 'high';
   }
 
-  if (textLength > 50) {
-    return 'medium'; // Acceptable length
+  // Medium confidence: reasonable length with some content
+  if (textLength > 30 && wordCount > 5) {
+    return 'medium';
   }
 
-  return 'low';
+  // Low confidence: very short or suspicious content
+  if (textLength < 30 || wordCount < 3) {
+    return 'low';
+  }
+
+  // Default to medium for anything else (changed from 'low')
+  return 'medium';
 }
 
 /**

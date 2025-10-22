@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check, LogOut } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, Copy, Check, LogOut, Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { API_ROUTES, UI_CONFIG } from "@/config/constants";
+import { API_ROUTES } from "@/config/constants";
 import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";
@@ -41,11 +42,19 @@ async function convertFilesToDataURLs(files: FileList) {
   );
 }
 
+// Target language options for translation
+const TARGET_LANGUAGES = [
+  { value: "en-US", label: "English", flag: "🇺🇸" },
+  { value: "fr", label: "French", flag: "🇫🇷" },
+  { value: "ar", label: "Arabic", flag: "🇸🇦" },
+] as const;
+
 export default function Home() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [targetLanguage, setTargetLanguage] = useState<string>("fr");
   const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
@@ -418,9 +427,15 @@ export default function Home() {
     files.forEach(file => dataTransfer.items.add(file));
     const fileParts = files.length > 0 ? await convertFilesToDataURLs(dataTransfer.files) : [];
 
+    // Create message with explicit target language instruction
+    const translationInstruction = `Translate to ${TARGET_LANGUAGES.find(l => l.value === targetLanguage)?.label}`;
+    const messageText = input.trim()
+      ? `${translationInstruction}\n\n${input}`
+      : translationInstruction;
+
     sendMessage({
       role: "user",
-      parts: [{ type: "text", text: input }, ...fileParts],
+      parts: [{ type: "text", text: messageText }, ...fileParts],
     });
 
     setInput("");
@@ -622,11 +637,11 @@ export default function Home() {
                   </h1>
                 </div>
 
-                {/* Message Input - Centered */}
-                <div className="w-full max-w-4xl mx-auto">
+                {/* Translation Input - Centered */}
+                <div className="w-full max-w-4xl mx-auto space-y-4">
                   {/* File Preview */}
                   {files.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
@@ -670,7 +685,30 @@ export default function Home() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                  {/* Target Language Selector */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-white/70">
+                      <Languages className="h-5 w-5" />
+                      <span className="text-sm font-medium">Translate to:</span>
+                    </div>
+                    <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                      <SelectTrigger className="w-[180px] h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TARGET_LANGUAGES.map((lang) => (
+                          <SelectItem key={lang.value} value={lang.value}>
+                            <span className="flex items-center gap-2">
+                              <span>{lang.flag}</span>
+                              <span>{lang.label}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
                     {/* Hidden File Input */}
                     <input
                       type="file"
@@ -681,40 +719,39 @@ export default function Home() {
                       className="hidden"
                     />
 
-                    {/* Plus Button */}
+                    {/* File/Image Upload Button */}
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                      className="flex-shrink-0 h-[52px] w-[52px] rounded-full bg-[#2f2f2f] text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
                     >
-                      <Plus className="h-5 w-5" />
-                      <span className="sr-only">Attach</span>
+                      <Plus className="h-6 w-6" />
+                      <span className="sr-only">Attach files</span>
                     </Button>
 
-                    {/* Input Field */}
+                    {/* Text Input Field */}
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      placeholder="Enter text or upload document/image to translate..."
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="flex-1 h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] px-6 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
 
-                    {/* Send Button */}
+                    {/* Translate Button */}
                     <Button
                       type="submit"
-                      size="icon"
                       disabled={isLoading || (!input.trim() && files.length === 0)}
-                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                      className={`flex-shrink-0 h-[52px] px-8 rounded-full transition-all duration-200 font-medium ${
                         input.trim() || files.length > 0
-                          ? "bg-white text-black hover:bg-white/90"
-                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                          ? "bg-gradient-to-r from-[#8353fd] to-[#e60054] hover:from-[#6942ca] hover:to-[#eb3376] text-white"
+                          : "bg-white/10 text-white/30 cursor-not-allowed"
                       }`}
                     >
-                      <ArrowUp className="h-5 w-5" />
-                      <span className="sr-only">Send message</span>
+                      <Languages className="h-5 w-5 mr-2" />
+                      Translate
                     </Button>
                   </form>
                 </div>
@@ -871,12 +908,12 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Message Input - Fixed at Bottom */}
+              {/* Translation Input - Fixed at Bottom */}
               <div className="flex-shrink-0 border-t border-white/10 bg-[#212121] px-4 py-4">
-                <div className="w-full max-w-4xl mx-auto">
+                <div className="w-full max-w-4xl mx-auto space-y-3">
                   {/* File Preview */}
                   {files.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
@@ -920,7 +957,30 @@ export default function Home() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                  {/* Target Language Selector */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-white/70">
+                      <Languages className="h-5 w-5" />
+                      <span className="text-sm font-medium">Translate to:</span>
+                    </div>
+                    <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                      <SelectTrigger className="w-[180px] h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TARGET_LANGUAGES.map((lang) => (
+                          <SelectItem key={lang.value} value={lang.value}>
+                            <span className="flex items-center gap-2">
+                              <span>{lang.flag}</span>
+                              <span>{lang.label}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
                     {/* Hidden File Input */}
                     <input
                       type="file"
@@ -931,40 +991,39 @@ export default function Home() {
                       className="hidden"
                     />
 
-                    {/* Plus Button */}
+                    {/* File/Image Upload Button */}
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                      className="flex-shrink-0 h-[52px] w-[52px] rounded-full bg-[#2f2f2f] text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
                     >
-                      <Plus className="h-5 w-5" />
-                      <span className="sr-only">Attach</span>
+                      <Plus className="h-6 w-6" />
+                      <span className="sr-only">Attach files</span>
                     </Button>
 
-                    {/* Input Field */}
+                    {/* Text Input Field */}
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      placeholder="Enter text or upload document/image to translate..."
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="flex-1 h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] px-6 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
 
-                    {/* Send Button */}
+                    {/* Translate Button */}
                     <Button
                       type="submit"
-                      size="icon"
                       disabled={isLoading || (!input.trim() && files.length === 0)}
-                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                      className={`flex-shrink-0 h-[52px] px-8 rounded-full transition-all duration-200 font-medium ${
                         input.trim() || files.length > 0
-                          ? "bg-white text-black hover:bg-white/90"
-                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                          ? "bg-gradient-to-r from-[#8353fd] to-[#e60054] hover:from-[#6942ca] hover:to-[#eb3376] text-white"
+                          : "bg-white/10 text-white/30 cursor-not-allowed"
                       }`}
                     >
-                      <ArrowUp className="h-5 w-5" />
-                      <span className="sr-only">Send message</span>
+                      <Languages className="h-5 w-5 mr-2" />
+                      Translate
                     </Button>
                   </form>
                 </div>

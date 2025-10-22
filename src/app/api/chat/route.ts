@@ -96,7 +96,26 @@ export async function POST(req: Request) {
 
         // PHASE 2: DETECT TARGET LANGUAGE
         console.log(`🌍 [PHASE 2] Detecting target language...`);
-        const targetLanguage = detectTargetLanguage(message, previousMessages);
+
+        // Extract target language from message if explicitly specified
+        const textParts = message.parts
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text);
+        const messageText = textParts.join(' ');
+
+        // Check for explicit "Translate to [Language]" instruction
+        let targetLanguage;
+        if (messageText.includes('Translate to English')) {
+          targetLanguage = 'en-US' as const;
+        } else if (messageText.includes('Translate to French')) {
+          targetLanguage = 'fr' as const;
+        } else if (messageText.includes('Translate to Arabic')) {
+          targetLanguage = 'ar' as const;
+        } else {
+          // Fallback to auto-detection
+          targetLanguage = detectTargetLanguage(message, previousMessages);
+        }
+
         console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
 
         // PHASE 3: DEEPL TRANSLATION

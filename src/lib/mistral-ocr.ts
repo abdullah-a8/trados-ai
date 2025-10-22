@@ -55,6 +55,9 @@ export async function processImageOCR(
 
     // Process OCR using image_url with data URL
     console.log(`🔄 [OCR] Processing OCR with data URL...`);
+    console.log(`📊 [OCR] Image size: ${imageBase64.length} bytes (base64)`);
+    console.log(`📊 [OCR] Media type: ${mediaType}`);
+
     const ocrResponse = await getMistralClient().ocr.process({
       model: 'mistral-ocr-latest',
       document: {
@@ -65,16 +68,32 @@ export async function processImageOCR(
     });
 
     console.log(`✅ [OCR] OCR completed: ${ocrResponse.pages.length} pages`);
+    console.log(`📊 [OCR] Usage info:`, JSON.stringify(ocrResponse.usageInfo, null, 2));
+    console.log(`📊 [OCR] Response structure:`, JSON.stringify({
+      pageCount: ocrResponse.pages.length,
+      model: ocrResponse.model,
+      pages: ocrResponse.pages.map((p, i) => ({
+        pageIndex: i,
+        markdownLength: p.markdown?.length || 0,
+        hasMarkdown: !!p.markdown,
+      }))
+    }, null, 2));
 
     // Extract markdown from all pages
+    console.log(`\n📄 [OCR] Processing ${ocrResponse.pages.length} page(s)...`);
     const markdown = ocrResponse.pages
       .map((page, idx) => {
+        console.log(`\n📄 [OCR] Page ${idx + 1} markdown (first 500 chars):\n${page.markdown.substring(0, 500)}`);
+        console.log(`📄 [OCR] Page ${idx + 1} length: ${page.markdown.length} chars`);
+
         if (ocrResponse.pages.length > 1) {
           return `### Document Page ${idx + 1}\n\n${page.markdown}`;
         }
         return page.markdown;
       })
       .join('\n\n---\n\n');
+
+    console.log(`\n📄 [OCR] Combined markdown length: ${markdown.length} chars`);
 
     // Calculate confidence based on content quality
     const confidence = calculateOCRConfidence(markdown);

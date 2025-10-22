@@ -88,6 +88,8 @@ export async function POST(req: Request) {
         console.log(
           `✅ [PHASE 1] OCR complete: ${ocrResult.markdown.length} chars, confidence: ${ocrResult.confidence}`
         );
+        console.log(`\n📄 [PHASE 1] OCR OUTPUT (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
+        console.log(`📄 [PHASE 1] OCR OUTPUT (last 500 chars):\n${ocrResult.markdown.substring(Math.max(0, ocrResult.markdown.length - 500))}\n`);
 
         // PHASE 2: DETECT TARGET LANGUAGE
         console.log(`🌍 [PHASE 2] Detecting target language...`);
@@ -96,6 +98,8 @@ export async function POST(req: Request) {
 
         // PHASE 3: DEEPL TRANSLATION
         console.log(`🔄 [PHASE 3] Starting DeepL translation...`);
+        console.log(`📤 [PHASE 3] INPUT TO DEEPL (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
+
         const translationResult = await translateMarkdown(
           ocrResult.markdown,
           targetLanguage,
@@ -105,8 +109,10 @@ export async function POST(req: Request) {
         );
 
         console.log(
-          `✅ [PHASE 3] Translation complete: ${translationResult.billedCharacters} chars`
+          `✅ [PHASE 3] Translation complete: ${translationResult.billedCharacters} chars, detected source: ${translationResult.sourceLanguage}`
         );
+        console.log(`📥 [PHASE 3] OUTPUT FROM DEEPL (first 1000 chars):\n${translationResult.text.substring(0, 1000)}\n`);
+        console.log(`📥 [PHASE 3] OUTPUT FROM DEEPL (last 500 chars):\n${translationResult.text.substring(Math.max(0, translationResult.text.length - 500))}\n`);
 
         // PHASE 4: STREAM TRANSLATED TEXT TO USER
         console.log(`📤 [PHASE 4] Streaming translation to user...`);

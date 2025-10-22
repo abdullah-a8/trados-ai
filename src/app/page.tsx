@@ -685,29 +685,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Target Language Selector */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 text-white/70">
-                      <Languages className="h-5 w-5" />
-                      <span className="text-sm font-medium">Translate to:</span>
-                    </div>
-                    <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-                      <SelectTrigger className="w-[180px] h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TARGET_LANGUAGES.map((lang) => (
-                          <SelectItem key={lang.value} value={lang.value}>
-                            <span className="flex items-center gap-2">
-                              <span>{lang.flag}</span>
-                              <span>{lang.label}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
                     {/* Hidden File Input */}
                     <input
@@ -754,6 +731,29 @@ export default function Home() {
                       Translate
                     </Button>
                   </form>
+
+                  {/* Target Language Selector */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-white/70">
+                      <Languages className="h-5 w-5" />
+                      <span className="text-sm font-medium">Translate to:</span>
+                    </div>
+                    <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                      <SelectTrigger className="w-[180px] h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TARGET_LANGUAGES.map((lang) => (
+                          <SelectItem key={lang.value} value={lang.value}>
+                            <span className="flex items-center gap-2">
+                              <span>{lang.flag}</span>
+                              <span>{lang.label}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>

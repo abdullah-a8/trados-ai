@@ -148,9 +148,9 @@ export function detectTargetLanguage(
  * Translate markdown text using DeepL
  */
 export async function translateMarkdown(
-  markdownText: string,
-  targetLang: TargetLanguage,
-  options?: {
+  _markdownText: string,
+  _targetLang: TargetLanguage,
+  _options?: {
     formality?: 'default' | 'more' | 'less' | 'prefer_more' | 'prefer_less';
     context?: string;
   }

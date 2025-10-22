@@ -50,14 +50,6 @@ const LANGUAGE_MAP: Record<string, TargetLanguage> = {
   'arabic': 'ar',
   'arabe': 'ar',
   'العربية': 'ar',
-
-  'es': 'es',
-  'spanish': 'es',
-  'espagnol': 'es',
-
-  'de': 'de',
-  'german': 'de',
-  'allemand': 'de',
 };
 
 /**

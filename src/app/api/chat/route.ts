@@ -18,7 +18,7 @@ import { processMultipleImagesOCR } from '@/lib/openai-ocr';
 import {
   translateMarkdown,
   detectTargetLanguage,
-} from '@/lib/deepl-translation';
+} from '@/lib/openai-translation';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -118,23 +118,20 @@ export async function POST(req: Request) {
 
         console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
 
-        // PHASE 3: DEEPL TRANSLATION
-        console.log(`🔄 [PHASE 3] Starting DeepL translation...`);
-        console.log(`📤 [PHASE 3] INPUT TO DEEPL (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
+        // PHASE 3: GPT-4o TRANSLATION
+        console.log(`🔄 [PHASE 3] Starting GPT-4o translation...`);
+        console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
         const translationResult = await translateMarkdown(
           ocrResult.markdown,
-          targetLanguage,
-          {
-            formality: 'prefer_more', // Formal for official documents
-          }
+          targetLanguage
         );
 
         console.log(
-          `✅ [PHASE 3] Translation complete: ${translationResult.billedCharacters} chars, detected source: ${translationResult.sourceLanguage}`
+          `✅ [PHASE 3] Translation complete: ${translationResult.text.length} chars`
         );
-        console.log(`📥 [PHASE 3] OUTPUT FROM DEEPL (first 1000 chars):\n${translationResult.text.substring(0, 1000)}\n`);
-        console.log(`📥 [PHASE 3] OUTPUT FROM DEEPL (last 500 chars):\n${translationResult.text.substring(Math.max(0, translationResult.text.length - 500))}\n`);
+        console.log(`📥 [PHASE 3] OUTPUT FROM TRANSLATION (first 1000 chars):\n${translationResult.text.substring(0, 1000)}\n`);
+        console.log(`📥 [PHASE 3] OUTPUT FROM TRANSLATION (last 500 chars):\n${translationResult.text.substring(Math.max(0, translationResult.text.length - 500))}\n`);
 
         // PHASE 4: STREAM TRANSLATED TEXT TO USER
         console.log(`📤 [PHASE 4] Streaming translation to user...`);
@@ -150,11 +147,12 @@ Simply output the translated text EXACTLY as provided, with proper markdown form
 
         // Save metadata about the pipeline for analytics
         const metadata = {
-          pipeline: 'gpt-4o-ocr + deepl',
+          pipeline: 'gpt-4o-ocr + gpt-4o-translation',
           ocrModel: ocrResult.metadata.model,
           ocrTokens: ocrResult.metadata.tokensUsed,
           ocrConfidence: ocrResult.confidence,
-          sourceLanguage: translationResult.sourceLanguage,
+          translationModel: translationResult.metadata.model,
+          translationTokens: translationResult.metadata.tokensUsed,
           targetLanguage: translationResult.targetLanguage,
           processingTime:
             ocrResult.metadata.processingTime +

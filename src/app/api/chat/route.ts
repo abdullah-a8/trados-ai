@@ -13,6 +13,14 @@ import { detectConversationLanguage } from '@/lib/language-detection';
 import { getRetryClarification } from '@/config/retry-prompts';
 import { nanoid } from 'nanoid';
 
+// OCR + Translation pipeline imports
+import { processMultipleImagesOCR, validateOCRResult } from '@/lib/mistral-ocr';
+import {
+  translateMarkdown,
+  detectTargetLanguage,
+  validateTranslationResult,
+} from '@/lib/deepl-translation';
+
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
 // With Fluid Compute enabled, you get up to 800s on Pro/Enterprise
@@ -52,6 +60,136 @@ export async function POST(req: Request) {
 
     // Combine previous messages with the new message
     const allMessages = [...previousMessages, message];
+
+    // ============================================
+    // NEW: OCR + TRANSLATION PIPELINE
+    // ============================================
+
+    // Check if message contains images
+    const imageParts = message.parts.filter(
+      (part): part is Extract<typeof part, { type: 'file' }> =>
+        part.type === 'file' && part.mediaType?.startsWith('image/')
+    );
+
+    if (imageParts.length > 0) {
+      console.log(
+        `📸 [PIPELINE] Detected ${imageParts.length} images - using OCR + Translation pipeline`
+      );
+
+      try {
+        // PHASE 1: MISTRAL OCR
+        console.log(`🔍 [PHASE 1] Starting Mistral OCR...`);
+        const ocrResult = await processMultipleImagesOCR(
+          imageParts.map((part) => ({
+            data: part.url.split('base64,')[1] || part.url, // Remove data URL prefix
+            mediaType: part.mediaType,
+          }))
+        );
+
+        console.log(
+          `✅ [PHASE 1] OCR complete: ${ocrResult.markdown.length} chars, confidence: ${ocrResult.confidence}`
+        );
+
+        // Validate OCR quality
+        const ocrValidation = validateOCRResult(ocrResult);
+        if (!ocrValidation.valid) {
+          console.warn(`⚠️ [VALIDATION] OCR issues:`, ocrValidation.errors);
+          // Continue anyway but log warnings
+        }
+
+        // PHASE 2: DETECT TARGET LANGUAGE
+        console.log(`🌍 [PHASE 2] Detecting target language...`);
+        const targetLanguage = detectTargetLanguage(message, previousMessages);
+        console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
+
+        // PHASE 3: DEEPL TRANSLATION
+        console.log(`🔄 [PHASE 3] Starting DeepL translation...`);
+        const translationResult = await translateMarkdown(
+          ocrResult.markdown,
+          targetLanguage,
+          {
+            formality: 'prefer_more', // Formal for official documents
+          }
+        );
+
+        console.log(
+          `✅ [PHASE 3] Translation complete: ${translationResult.billedCharacters} chars`
+        );
+
+        // PHASE 4: VALIDATION
+        console.log(`✔️ [PHASE 4] Validating translation output...`);
+        const translationValidation = validateTranslationResult(
+          ocrResult.markdown,
+          translationResult
+        );
+
+        if (!translationValidation.valid) {
+          console.warn(
+            `⚠️ [VALIDATION] Translation issues:`,
+            translationValidation.errors
+          );
+        }
+
+        if (translationValidation.warnings.length > 0) {
+          console.warn(
+            `⚠️ [VALIDATION] Translation warnings:`,
+            translationValidation.warnings
+          );
+        }
+
+        // PHASE 5: STREAM TRANSLATED TEXT TO USER
+        console.log(`📤 [PHASE 5] Streaming translation to user...`);
+
+        // Create a simple streaming response with the translated text
+        const result = streamText({
+          model: google(MODEL_CONFIG.modelId),
+          system: `You are a document formatter. Your ONLY job is to output the provided translated document in clean markdown format.
+Do NOT add any commentary, explanations, or modifications.
+Simply output the translated text EXACTLY as provided, with proper markdown formatting.`,
+          prompt: `Output this translated document:\n\n${translationResult.text}`,
+        });
+
+        // Save metadata about the pipeline for analytics
+        const metadata = {
+          pipeline: 'mistral-ocr + deepl',
+          ocrConfidence: ocrResult.confidence,
+          sourceLanguage: translationResult.sourceLanguage,
+          targetLanguage: translationResult.targetLanguage,
+          processingTime:
+            ocrResult.metadata.processingTime +
+            translationResult.metadata.processingTime,
+        };
+
+        console.log(`📊 [PIPELINE] Metadata:`, metadata);
+
+        return result.toUIMessageStreamResponse({
+          originalMessages: allMessages,
+          generateMessageId: createIdGenerator({
+            prefix: 'msg',
+            size: 16,
+          }),
+          onFinish: async ({ messages }) => {
+            try {
+              await saveChat(chatId, messages);
+              console.log(`✅ Saved ${messages.length} messages for chat ${chatId}`);
+            } catch (error) {
+              console.error('Failed to save chat:', error);
+            }
+          },
+        });
+      } catch (error) {
+        console.error('❌ [PIPELINE] Error:', error);
+
+        // FALLBACK: Use Gemini 2.5 Flash if pipeline fails
+        console.log(`🔄 [FALLBACK] Using Gemini 2.5 Flash as fallback...`);
+        // Fall through to original Gemini implementation below
+      }
+    }
+
+    // ============================================
+    // FALLBACK: ORIGINAL GEMINI 2.5 FLASH FLOW
+    // (Used for non-image requests or pipeline failures)
+    // ============================================
 
     // Retry mechanism: max 2 retries for refusals
     const MAX_RETRIES = 2;

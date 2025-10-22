@@ -14,7 +14,7 @@ import { getRetryClarification } from '@/config/retry-prompts';
 import { nanoid } from 'nanoid';
 
 // OCR + Translation pipeline imports
-import { processMultipleImagesOCR } from '@/lib/mistral-ocr';
+import { processMultipleImagesOCR } from '@/lib/openai-ocr';
 import {
   translateMarkdown,
   detectTargetLanguage,
@@ -76,8 +76,8 @@ export async function POST(req: Request) {
       );
 
       try {
-        // PHASE 1: MISTRAL OCR
-        console.log(`🔍 [PHASE 1] Starting Mistral OCR...`);
+        // PHASE 1: GPT-4o OCR
+        console.log(`🔍 [PHASE 1] Starting GPT-4o OCR...`);
         const ocrResult = await processMultipleImagesOCR(
           imageParts.map((part) => ({
             data: part.url.split('base64,')[1] || part.url, // Remove data URL prefix
@@ -87,6 +87,9 @@ export async function POST(req: Request) {
 
         console.log(
           `✅ [PHASE 1] OCR complete: ${ocrResult.markdown.length} chars, confidence: ${ocrResult.confidence}`
+        );
+        console.log(
+          `📊 [PHASE 1] Model: ${ocrResult.metadata.model}, Tokens: ${ocrResult.metadata.tokensUsed}`
         );
         console.log(`\n📄 [PHASE 1] OCR OUTPUT (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
         console.log(`📄 [PHASE 1] OCR OUTPUT (last 500 chars):\n${ocrResult.markdown.substring(Math.max(0, ocrResult.markdown.length - 500))}\n`);
@@ -128,7 +131,9 @@ Simply output the translated text EXACTLY as provided, with proper markdown form
 
         // Save metadata about the pipeline for analytics
         const metadata = {
-          pipeline: 'mistral-ocr + deepl',
+          pipeline: 'gpt-4o-ocr + deepl',
+          ocrModel: ocrResult.metadata.model,
+          ocrTokens: ocrResult.metadata.tokensUsed,
           ocrConfidence: ocrResult.confidence,
           sourceLanguage: translationResult.sourceLanguage,
           targetLanguage: translationResult.targetLanguage,

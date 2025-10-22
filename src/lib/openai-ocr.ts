@@ -1,25 +1,25 @@
 /**
- * Mistral OCR Service
+ * OpenAI GPT-4o Vision OCR Service
  *
- * Handles OCR processing using Mistral's specialized OCR model
- * Converts images to structured markdown for translation
+ * Handles OCR processing using GPT-4o's vision capabilities
+ * Extracts text from images in accurate markdown format
  */
 
-import { Mistral } from '@mistralai/mistralai';
+import OpenAI from 'openai';
 
-// Lazy initialization of Mistral client
-let mistralClient: Mistral | null = null;
+// Lazy initialization of OpenAI client
+let openaiClient: OpenAI | null = null;
 
-function getMistralClient(): Mistral {
-  if (!mistralClient) {
-    if (!process.env.MISTRAL_API_KEY) {
-      throw new Error('MISTRAL_API_KEY environment variable is not set');
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
     }
-    mistralClient = new Mistral({
-      apiKey: process.env.MISTRAL_API_KEY,
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
   }
-  return mistralClient;
+  return openaiClient;
 }
 
 /**
@@ -31,13 +31,13 @@ export interface OCRResult {
   confidence: 'high' | 'medium' | 'low';
   metadata: {
     processingTime: number;
-    pagesProcessed: number;
-    docSizeBytes: number;
+    model: string;
+    tokensUsed: number;
   };
 }
 
 /**
- * Process single image with Mistral OCR
+ * Process single image with GPT-4o Vision
  */
 export async function processImageOCR(
   imageBase64: string,
@@ -46,57 +46,67 @@ export async function processImageOCR(
   const startTime = Date.now();
 
   try {
-    console.log(`🔍 [OCR] Starting OCR for ${mediaType} image`);
+    console.log(`🔍 [OCR] Starting GPT-4o OCR for ${mediaType} image`);
 
-    // Prepare base64 data URL for Mistral OCR
+    // Prepare base64 data URL
     const dataUrl = imageBase64.includes('data:')
       ? imageBase64
       : `data:${mediaType};base64,${imageBase64}`;
 
-    // Process OCR using image_url with data URL
-    console.log(`🔄 [OCR] Processing OCR with data URL...`);
     console.log(`📊 [OCR] Image size: ${imageBase64.length} bytes (base64)`);
     console.log(`📊 [OCR] Media type: ${mediaType}`);
 
-    const ocrResponse = await getMistralClient().ocr.process({
-      model: 'mistral-ocr-latest',
-      document: {
-        type: 'image_url',
-        imageUrl: dataUrl,
-      },
-      includeImageBase64: false, // Don't need images in response
+    // Process OCR using GPT-4o Vision
+    console.log(`🔄 [OCR] Sending to GPT-4o for text extraction...`);
+
+    const completion = await getOpenAIClient().chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Extract ALL text from this image and format it as clean, accurate markdown.
+
+CRITICAL REQUIREMENTS:
+1. Extract EVERY piece of text visible in the image - do not skip or summarize anything
+2. Preserve the exact structure and layout of the document
+3. Maintain proper hierarchy with markdown headings (use #, ##, ### appropriately)
+4. Use **bold** for emphasized or bold text
+5. Use tables (| ... |) for tabular data
+6. Use lists (-, *, 1.) for listed items
+7. Preserve all numbers, dates, and identifiers EXACTLY as shown
+8. Do NOT add any explanations, comments, or interpretations
+9. Do NOT translate or modify the text - keep it in the original language
+10. Output ONLY the extracted markdown - nothing else
+
+Your response should be pure markdown that accurately represents the complete document.`,
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: dataUrl,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 4096,
+      temperature: 0, // Use deterministic output for OCR
     });
 
-    console.log(`✅ [OCR] OCR completed: ${ocrResponse.pages.length} pages`);
-    console.log(`📊 [OCR] Usage info:`, JSON.stringify(ocrResponse.usageInfo, null, 2));
-    console.log(`📊 [OCR] Response structure:`, JSON.stringify({
-      pageCount: ocrResponse.pages.length,
-      model: ocrResponse.model,
-      pages: ocrResponse.pages.map((p, i) => ({
-        pageIndex: i,
-        markdownLength: p.markdown?.length || 0,
-        hasMarkdown: !!p.markdown,
-      }))
-    }, null, 2));
+    const extractedText = completion.choices[0]?.message?.content || '';
+    const tokensUsed = completion.usage?.total_tokens || 0;
 
-    // Extract markdown from all pages
-    console.log(`\n📄 [OCR] Processing ${ocrResponse.pages.length} page(s)...`);
-    const markdown = ocrResponse.pages
-      .map((page, idx) => {
-        console.log(`\n📄 [OCR] Page ${idx + 1} markdown (first 500 chars):\n${page.markdown.substring(0, 500)}`);
-        console.log(`📄 [OCR] Page ${idx + 1} length: ${page.markdown.length} chars`);
-
-        if (ocrResponse.pages.length > 1) {
-          return `### Document Page ${idx + 1}\n\n${page.markdown}`;
-        }
-        return page.markdown;
-      })
-      .join('\n\n---\n\n');
-
-    console.log(`\n📄 [OCR] Combined markdown length: ${markdown.length} chars`);
+    console.log(`✅ [OCR] GPT-4o extraction complete`);
+    console.log(`📊 [OCR] Extracted ${extractedText.length} characters`);
+    console.log(`📊 [OCR] Tokens used: ${tokensUsed}`);
+    console.log(`📄 [OCR] EXTRACTED TEXT (first 1000 chars):\n${extractedText.substring(0, 1000)}`);
+    console.log(`📄 [OCR] EXTRACTED TEXT (last 500 chars):\n${extractedText.substring(Math.max(0, extractedText.length - 500))}`);
 
     // Calculate confidence based on content quality
-    const confidence = calculateOCRConfidence(markdown);
+    const confidence = calculateOCRConfidence(extractedText);
 
     const processingTime = Date.now() - startTime;
 
@@ -105,19 +115,19 @@ export async function processImageOCR(
     );
 
     return {
-      markdown,
-      pages: ocrResponse.pages.length,
+      markdown: extractedText,
+      pages: 1,
       confidence,
       metadata: {
         processingTime,
-        pagesProcessed: ocrResponse.usageInfo.pagesProcessed || 0,
-        docSizeBytes: ocrResponse.usageInfo.docSizeBytes || 0,
+        model: 'gpt-4o',
+        tokensUsed,
       },
     };
   } catch (error) {
     console.error('❌ [OCR] Error:', error);
     throw new Error(
-      `Mistral OCR failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `GPT-4o OCR failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }
@@ -130,7 +140,7 @@ export async function processMultipleImagesOCR(
 ): Promise<OCRResult> {
   const startTime = Date.now();
 
-  console.log(`🔍 [OCR] Processing ${images.length} images in parallel...`);
+  console.log(`🔍 [OCR] Processing ${images.length} images with GPT-4o...`);
 
   // Process all images in parallel
   const results = await Promise.all(
@@ -161,6 +171,9 @@ export async function processMultipleImagesOCR(
     })
     .join('\n\n---\n\n');
 
+  console.log(`📄 [OCR] COMBINED OUTPUT (first 1000 chars):\n${combinedMarkdown.substring(0, 1000)}`);
+  console.log(`📄 [OCR] COMBINED OUTPUT (last 500 chars):\n${combinedMarkdown.substring(Math.max(0, combinedMarkdown.length - 500))}`);
+
   // Calculate overall confidence (minimum of all confidences)
   const overallConfidence =
     successfulResults.every((r) => r.confidence === 'high')
@@ -170,11 +183,13 @@ export async function processMultipleImagesOCR(
         : 'medium';
 
   const totalPages = successfulResults.reduce((sum, r) => sum + r.pages, 0);
+  const totalTokens = successfulResults.reduce((sum, r) => sum + r.metadata.tokensUsed, 0);
   const processingTime = Date.now() - startTime;
 
   console.log(
     `✅ [OCR] All images processed in ${processingTime}ms (${successfulResults.length}/${images.length} successful)`
   );
+  console.log(`📊 [OCR] Total tokens used: ${totalTokens}`);
 
   return {
     markdown: combinedMarkdown,
@@ -182,11 +197,8 @@ export async function processMultipleImagesOCR(
     confidence: overallConfidence,
     metadata: {
       processingTime,
-      pagesProcessed: totalPages,
-      docSizeBytes: successfulResults.reduce(
-        (sum, r) => sum + r.metadata.docSizeBytes,
-        0
-      ),
+      model: 'gpt-4o',
+      tokensUsed: totalTokens,
     },
   };
 }
@@ -240,6 +252,6 @@ function calculateOCRConfidence(
     return 'low';
   }
 
-  // Default to medium for anything else (changed from 'low')
+  // Default to medium for anything else
   return 'medium';
 }

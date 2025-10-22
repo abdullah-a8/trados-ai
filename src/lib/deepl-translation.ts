@@ -5,22 +5,22 @@
  * Optimized for official document translation with formality control
  */
 
-import * as deepl from 'deepl-node';
+// import * as deepl from 'deepl-node';
 import { detectConversationLanguage } from './language-detection';
 import type { UIMessage } from 'ai';
 
 // Lazy initialization of DeepL client
-let translator: deepl.Translator | null = null;
+// let translator: deepl.Translator | null = null;
 
-function getTranslator(): deepl.Translator {
-  if (!translator) {
-    if (!process.env.DEEPL_API_KEY) {
-      throw new Error('DEEPL_API_KEY environment variable is not set');
-    }
-    translator = new deepl.Translator(process.env.DEEPL_API_KEY);
-  }
-  return translator;
-}
+// function getTranslator(): deepl.Translator {
+//   if (!translator) {
+//     if (!process.env.DEEPL_API_KEY) {
+//       throw new Error('DEEPL_API_KEY environment variable is not set');
+//     }
+//     translator = new deepl.Translator(process.env.DEEPL_API_KEY);
+//   }
+//   return translator;
+// }
 
 /**
  * Supported target languages (DeepL format)
@@ -155,44 +155,46 @@ export async function translateMarkdown(
     context?: string;
   }
 ): Promise<TranslationResult> {
-  const startTime = Date.now();
+  // const startTime = Date.now();
 
-  try {
-    console.log(`🌍 [TRANSLATION] Translating to ${targetLang}...`);
+  // try {
+  //   console.log(`🌍 [TRANSLATION] Translating to ${targetLang}...`);
 
-    // DeepL API call
-    const result = await getTranslator().translateText(
-      markdownText,
-      null, // Auto-detect source language
-      targetLang,
-      {
-        preserveFormatting: true,
-        formality: options?.formality || 'prefer_more', // Formal for official docs
-        context: options?.context,
-      }
-    );
+  //   // DeepL API call
+  //   const result = await getTranslator().translateText(
+  //     markdownText,
+  //     null, // Auto-detect source language
+  //     targetLang,
+  //     {
+  //       preserveFormatting: true,
+  //       formality: options?.formality || 'prefer_more', // Formal for official docs
+  //       context: options?.context,
+  //     }
+  //   );
 
-    const processingTime = Date.now() - startTime;
+  //   const processingTime = Date.now() - startTime;
 
-    console.log(
-      `✅ [TRANSLATION] Complete in ${processingTime}ms (${result.billedCharacters} chars)`
-    );
+  //   console.log(
+  //     `✅ [TRANSLATION] Complete in ${processingTime}ms (${result.billedCharacters} chars)`
+  //   );
 
-    return {
-      text: result.text,
-      sourceLanguage: result.detectedSourceLang,
-      targetLanguage: targetLang,
-      billedCharacters: result.billedCharacters || 0,
-      metadata: {
-        processingTime,
-      },
-    };
-  } catch (error) {
-    console.error('❌ [TRANSLATION] Error:', error);
-    throw new Error(
-      `DeepL translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
+  //   return {
+  //     text: result.text,
+  //     sourceLanguage: result.detectedSourceLang,
+  //     targetLanguage: targetLang,
+  //     billedCharacters: result.billedCharacters || 0,
+  //     metadata: {
+  //       processingTime,
+  //     },
+  //   };
+  // } catch (error) {
+  //   console.error('❌ [TRANSLATION] Error:', error);
+  //   throw new Error(
+  //     `DeepL translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+  //   );
+  // }
+  
+  throw new Error('DeepL translation is currently disabled. Install deepl-node package to enable.');
 }
 
 
@@ -204,20 +206,22 @@ export async function getDeepLUsage(): Promise<{
   characterLimit: number;
   percentUsed: number;
 }> {
-  try {
-    const usage = await getTranslator().getUsage();
+  // try {
+  //   const usage = await getTranslator().getUsage();
 
-    if (usage.character) {
-      return {
-        characterCount: usage.character.count,
-        characterLimit: usage.character.limit,
-        percentUsed: (usage.character.count / usage.character.limit) * 100,
-      };
-    }
+  //   if (usage.character) {
+  //     return {
+  //       characterCount: usage.character.count,
+  //       characterLimit: usage.character.limit,
+  //       percentUsed: (usage.character.count / usage.character.limit) * 100,
+  //     };
+  //   }
 
-    throw new Error('Usage data not available');
-  } catch (error) {
-    console.error('❌ [DEEPL] Failed to get usage:', error);
-    throw error;
-  }
+  //   throw new Error('Usage data not available');
+  // } catch (error) {
+  //   console.error('❌ [DEEPL] Failed to get usage:', error);
+  //   throw error;
+  // }
+  
+  throw new Error('DeepL translation is currently disabled. Install deepl-node package to enable.');
 }

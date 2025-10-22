@@ -14,11 +14,10 @@ import { getRetryClarification } from '@/config/retry-prompts';
 import { nanoid } from 'nanoid';
 
 // OCR + Translation pipeline imports
-import { processMultipleImagesOCR, validateOCRResult } from '@/lib/mistral-ocr';
+import { processMultipleImagesOCR } from '@/lib/mistral-ocr';
 import {
   translateMarkdown,
   detectTargetLanguage,
-  validateTranslationResult,
 } from '@/lib/deepl-translation';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
@@ -90,13 +89,6 @@ export async function POST(req: Request) {
           `✅ [PHASE 1] OCR complete: ${ocrResult.markdown.length} chars, confidence: ${ocrResult.confidence}`
         );
 
-        // Validate OCR quality
-        const ocrValidation = validateOCRResult(ocrResult);
-        if (!ocrValidation.valid) {
-          console.warn(`⚠️ [VALIDATION] OCR issues:`, ocrValidation.errors);
-          // Continue anyway but log warnings
-        }
-
         // PHASE 2: DETECT TARGET LANGUAGE
         console.log(`🌍 [PHASE 2] Detecting target language...`);
         const targetLanguage = detectTargetLanguage(message, previousMessages);
@@ -116,29 +108,8 @@ export async function POST(req: Request) {
           `✅ [PHASE 3] Translation complete: ${translationResult.billedCharacters} chars`
         );
 
-        // PHASE 4: VALIDATION
-        console.log(`✔️ [PHASE 4] Validating translation output...`);
-        const translationValidation = validateTranslationResult(
-          ocrResult.markdown,
-          translationResult
-        );
-
-        if (!translationValidation.valid) {
-          console.warn(
-            `⚠️ [VALIDATION] Translation issues:`,
-            translationValidation.errors
-          );
-        }
-
-        if (translationValidation.warnings.length > 0) {
-          console.warn(
-            `⚠️ [VALIDATION] Translation warnings:`,
-            translationValidation.warnings
-          );
-        }
-
-        // PHASE 5: STREAM TRANSLATED TEXT TO USER
-        console.log(`📤 [PHASE 5] Streaming translation to user...`);
+        // PHASE 4: STREAM TRANSLATED TEXT TO USER
+        console.log(`📤 [PHASE 4] Streaming translation to user...`);
 
         // Create a simple streaming response with the translated text
         const result = streamText({

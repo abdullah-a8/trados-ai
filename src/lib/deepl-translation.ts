@@ -195,61 +195,6 @@ export async function translateMarkdown(
   }
 }
 
-/**
- * Validate translation result quality
- */
-export function validateTranslationResult(
-  ocrText: string,
-  translationResult: TranslationResult
-): {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
-} {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  // Check if translation is empty
-  if (!translationResult.text || translationResult.text.trim().length === 0) {
-    errors.push('Translation output is empty');
-  }
-
-  // Check if translation is too short compared to input
-  const inputLength = ocrText.length;
-  const outputLength = translationResult.text.length;
-  const lengthRatio = outputLength / inputLength;
-
-  if (lengthRatio < 0.3) {
-    errors.push(
-      `Translation too short (${Math.round(lengthRatio * 100)}% of input)`
-    );
-  }
-
-  // Warn if translation is suspiciously long (possible duplication)
-  if (lengthRatio > 3) {
-    warnings.push(
-      `Translation much longer than input (${Math.round(lengthRatio * 100)}%)`
-    );
-  }
-
-  // Check structure preservation (headings, tables, lists)
-  const inputHasStructure =
-    ocrText.includes('#') || ocrText.includes('|') || ocrText.includes('**');
-  const outputHasStructure =
-    translationResult.text.includes('#') ||
-    translationResult.text.includes('|') ||
-    translationResult.text.includes('**');
-
-  if (inputHasStructure && !outputHasStructure) {
-    warnings.push('Markdown structure may not be fully preserved');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
-}
 
 /**
  * Get available DeepL usage (for monitoring)

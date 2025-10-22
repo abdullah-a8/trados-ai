@@ -224,33 +224,3 @@ function calculateOCRConfidence(
   // Default to medium for anything else (changed from 'low')
   return 'medium';
 }
-
-/**
- * Validate OCR result quality
- */
-export function validateOCRResult(result: OCRResult): {
-  valid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  // Check minimum text length
-  if (result.markdown.trim().length < 10) {
-    errors.push('OCR output too short (possible extraction failure)');
-  }
-
-  // Check confidence
-  if (result.confidence === 'low') {
-    errors.push('Low OCR confidence - manual review recommended');
-  }
-
-  // Check for empty pages
-  if (result.pages === 0) {
-    errors.push('No pages processed');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}

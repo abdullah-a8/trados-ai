@@ -18,6 +18,7 @@ import {
   validateAndMergeWithRedis,
   isCacheValid,
   setupCrossTabSync,
+  cleanupOldChats,
 } from '@/lib/chat-storage';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
@@ -69,6 +70,9 @@ export const useChatStore = create<ChatState>()(
       // Load chats from local storage immediately (instant)
       loadChatsFromCache: () => {
         try {
+          // Proactively cleanup old chats on load to prevent quota issues
+          cleanupOldChats();
+
           const cachedChats = getCachedChatList();
           set({
             chats: cachedChats,
@@ -230,9 +234,14 @@ export const useChatStore = create<ChatState>()(
 
         set({ currentMessages: messages });
 
-        // Cache the updated messages
-        if (currentChatId) {
-          cacheChat(currentChatId, messages);
+        // Cache the updated messages (cacheChat handles size limits internally)
+        if (currentChatId && messages.length > 0) {
+          try {
+            cacheChat(currentChatId, messages);
+          } catch {
+            // Silently fail - caching is optional for UX, not critical
+            console.debug('Failed to cache messages, will fetch from Redis on reload');
+          }
         }
       },
 

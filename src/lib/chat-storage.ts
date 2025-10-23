@@ -15,6 +15,8 @@ const STORAGE_KEYS = {
 
 const SYNC_VERSION = '1.0.0'; // Bump this to invalidate old caches
 const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const MAX_CACHED_CHATS = 10; // Only cache the 10 most recent chats
+const MAX_MESSAGE_SIZE = 500 * 1024; // 500KB per chat (to avoid quota issues)
 
 interface CacheMetadata {
   version: string;
@@ -96,14 +98,29 @@ export function getCachedChatList(): StoredChat[] {
 }
 
 /**
- * Cache the full chat list
+ * Cache the full chat list (limited to most recent)
  */
 export function cacheChatList(chats: StoredChat[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.CHAT_LIST, JSON.stringify(chats));
-    updateCacheMetadata(chats.map(c => c.id));
+    // Only cache metadata for the most recent chats
+    const limited = chats.slice(0, MAX_CACHED_CHATS);
+    localStorage.setItem(STORAGE_KEYS.CHAT_LIST, JSON.stringify(limited));
+    updateCacheMetadata(limited.map(c => c.id));
   } catch (error) {
-    console.error('Failed to cache chat list:', error);
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      console.warn('Storage quota exceeded when caching chat list, clearing old data');
+      cleanupOldChats();
+      // Retry with even fewer chats
+      try {
+        const limited = chats.slice(0, 5);
+        localStorage.setItem(STORAGE_KEYS.CHAT_LIST, JSON.stringify(limited));
+        updateCacheMetadata(limited.map(c => c.id));
+      } catch (retryError) {
+        console.error('Failed to cache chat list after cleanup:', retryError);
+      }
+    } else {
+      console.error('Failed to cache chat list:', error);
+    }
   }
 }
 
@@ -122,14 +139,64 @@ export function getCachedChat(chatId: string): UIMessage[] | null {
 }
 
 /**
- * Cache a specific chat's messages
+ * Cache a specific chat's messages with size limits and quota handling
  */
 export function cacheChat(chatId: string, messages: UIMessage[]): void {
   try {
     const key = `${STORAGE_KEYS.CHAT_PREFIX}${chatId}`;
-    localStorage.setItem(key, JSON.stringify(messages));
+
+    // Strip large file data URLs from messages to save space
+    const strippedMessages = messages.map(msg => ({
+      ...msg,
+      parts: msg.parts.map(part => {
+        // Keep text and small files, but remove large file data URLs
+        if (part.type === 'file' && part.url && part.url.startsWith('data:')) {
+          const dataUrlSize = part.url.length;
+          // Keep files under 50KB, strip larger ones
+          if (dataUrlSize > 50 * 1024) {
+            return {
+              ...part,
+              url: undefined, // Strip the data URL
+              _stripped: true, // Mark as stripped
+            };
+          }
+        }
+        return part;
+      }),
+    }));
+
+    const serialized = JSON.stringify(strippedMessages);
+
+    // Check size before caching
+    if (serialized.length > MAX_MESSAGE_SIZE) {
+      console.warn(`Chat ${chatId} too large to cache (${(serialized.length / 1024).toFixed(0)}KB), skipping`);
+      return;
+    }
+
+    localStorage.setItem(key, serialized);
   } catch (error) {
-    console.error(`Failed to cache chat ${chatId}:`, error);
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      console.warn(`Storage quota exceeded, cleaning up old chats...`);
+      cleanupOldChats();
+
+      // Retry once after cleanup
+      try {
+        const key = `${STORAGE_KEYS.CHAT_PREFIX}${chatId}`;
+        const strippedMessages = messages.map(msg => ({
+          ...msg,
+          parts: msg.parts.map(part =>
+            part.type === 'file' && part.url?.startsWith('data:')
+              ? { ...part, url: undefined, _stripped: true }
+              : part
+          ),
+        }));
+        localStorage.setItem(key, JSON.stringify(strippedMessages));
+      } catch (retryError) {
+        console.error(`Failed to cache chat ${chatId} after cleanup:`, retryError);
+      }
+    } else {
+      console.error(`Failed to cache chat ${chatId}:`, error);
+    }
   }
 }
 
@@ -170,6 +237,39 @@ export function removeCachedChat(chatId: string): void {
     localStorage.removeItem(key);
   } catch (error) {
     console.error(`Failed to remove cached chat ${chatId}:`, error);
+  }
+}
+
+/**
+ * Cleanup old chats to free up storage space (LRU eviction)
+ */
+export function cleanupOldChats(): void {
+  try {
+    const chats = getCachedChatList();
+    const metadata = getCacheMetadata();
+
+    if (!metadata || chats.length === 0) return;
+
+    // Sort by last updated (oldest first)
+    const sorted = [...chats].sort(
+      (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+    );
+
+    // Remove oldest chats beyond the limit
+    const toRemove = sorted.slice(0, Math.max(sorted.length - MAX_CACHED_CHATS, 5));
+
+    toRemove.forEach(chat => {
+      const key = `${STORAGE_KEYS.CHAT_PREFIX}${chat.id}`;
+      localStorage.removeItem(key);
+    });
+
+    // Update the chat list to only keep recent ones
+    const remaining = chats.filter(c => !toRemove.find(r => r.id === c.id));
+    cacheChatList(remaining);
+
+    console.log(`Cleaned up ${toRemove.length} old chats from cache`);
+  } catch (error) {
+    console.error('Failed to cleanup old chats:', error);
   }
 }
 

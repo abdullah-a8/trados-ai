@@ -88,6 +88,14 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
+  
+  // Use refs to capture current values for useChat hook (prevents stale closures)
+  const translationModelRef = useRef(translationModel);
+  const isHistoryEnabledRef = useRef(isHistoryEnabled);
+  
+  // Keep refs in sync with state
+  translationModelRef.current = translationModel;
+  isHistoryEnabledRef.current = isHistoryEnabled;
 
   // Rename for backward compatibility
   const chatHistory = chats;
@@ -114,16 +122,15 @@ export default function Home() {
     id: chatId, // Use the chat ID
     transport: new DefaultChatTransport({
       api: API_ROUTES.chat,
-      // Use function for body to get current values dynamically
-      body: () => ({
-        historyEnabled: isHistoryEnabled,
-        translationModel: translationModel,
-      }),
       // IMPORTANT: Only send the last message to reduce network traffic
       prepareSendMessagesRequest({ messages, id }) {
+        // Use refs to get current values (prevents stale closure issue)
+        const currentTranslationModel = translationModelRef.current;
+        const currentHistoryEnabled = isHistoryEnabledRef.current;
+        
         console.log('🚀 [FRONTEND] Sending request with:', {
-          translationModel,
-          historyEnabled: isHistoryEnabled,
+          translationModel: currentTranslationModel,
+          historyEnabled: currentHistoryEnabled,
           messageCount: messages.length,
         });
 
@@ -131,8 +138,8 @@ export default function Home() {
           body: {
             message: messages[messages.length - 1], // Only last message
             id, // Chat ID
-            historyEnabled: isHistoryEnabled, // Current value
-            translationModel: translationModel // Current value
+            historyEnabled: currentHistoryEnabled,
+            translationModel: currentTranslationModel
           }
         };
       },

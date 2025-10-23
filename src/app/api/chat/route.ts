@@ -41,6 +41,7 @@ export async function POST(req: Request) {
       translationModel?: string;
     } = body;
 
+    console.log(`🎯 [MODEL] Request body translationModel: ${body.translationModel}`);
     console.log(`🎯 [MODEL] Selected translation model: ${translationModel}`);
     console.log(`📝 [MODEL] historyEnabled: ${historyEnabled}`);
 
@@ -138,9 +139,14 @@ export async function POST(req: Request) {
         console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
         // Select the appropriate model based on user choice
+        console.log(`🔍 [MODEL SELECTION] translationModel value: "${translationModel}"`);
+        console.log(`🔍 [MODEL SELECTION] Checking if translationModel === 'gemini-2.5-flash': ${translationModel === 'gemini-2.5-flash'}`);
+        
         const selectedModel = translationModel === 'gemini-2.5-flash'
           ? google(MODEL_CONFIG.modelId)
           : openai('gpt-4o');
+        
+        console.log(`✅ [MODEL SELECTION] Selected model: ${translationModel === 'gemini-2.5-flash' ? 'Google Gemini' : 'OpenAI GPT-4o'}`);
 
         // Use Vercel AI SDK streamText with selected model
         let streamBuffer = '';

@@ -147,10 +147,11 @@ export function detectTargetLanguage(
 /**
  * Translate markdown text using DeepL
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function translateMarkdown(
-  _markdownText: string,
-  _targetLang: TargetLanguage,
-  _options?: {
+  markdownText: string,
+  targetLang: TargetLanguage,
+  options?: {
     formality?: 'default' | 'more' | 'less' | 'prefer_more' | 'prefer_less';
     context?: string;
   }

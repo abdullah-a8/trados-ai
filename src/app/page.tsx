@@ -7,6 +7,7 @@ import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, Copy, Ch
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { API_ROUTES } from "@/config/constants";
@@ -58,6 +59,7 @@ export default function Home() {
   const chats = useChatStore(chatSelectors.chats);
   const isLoadingChats = useChatStore(chatSelectors.isLoadingChats);
   const syncStatus = useChatStore(chatSelectors.syncStatus);
+  const isHistoryEnabled = useChatStore(chatSelectors.isHistoryEnabled);
   const loadChatsFromCache = useChatStore(state => state.loadChatsFromCache);
   const syncChatsWithRedis = useChatStore(state => state.syncChatsWithRedis);
   const loadChatMessages = useChatStore(state => state.loadChatMessages);
@@ -65,6 +67,7 @@ export default function Home() {
   const addChat = useChatStore(state => state.addChat);
   const deleteChat = useChatStore(state => state.deleteChat);
   const updateCurrentMessages = useChatStore(state => state.updateCurrentMessages);
+  const toggleHistory = useChatStore(state => state.toggleHistory);
 
   // Local UI state
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -75,7 +78,6 @@ export default function Home() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [thinkingPhase, setThinkingPhase] = useState<ThinkingPhase>('general');
-  const [loadingStartTime, setLoadingStartTime] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
@@ -110,7 +112,8 @@ export default function Home() {
         return {
           body: {
             message: messages[messages.length - 1], // Only last message
-            id // Chat ID
+            id, // Chat ID
+            historyEnabled: isHistoryEnabled // Let backend know if history is enabled
           }
         };
       },
@@ -128,8 +131,6 @@ export default function Home() {
   // Track loading phases for better UX
   useEffect(() => {
     if (status === 'submitted') {
-      setLoadingStartTime(Date.now());
-
       // Determine initial phase based on content
       if (hasImages) {
         setThinkingPhase('ocr');
@@ -162,7 +163,7 @@ export default function Home() {
     // Load from local storage instantly
     loadChatsFromCache();
 
-    // Sync with Redis in background after a small delay
+    // Sync with Redis in background after a small delay (ONLY on page load)
     const syncTimeout = setTimeout(() => {
       syncChatsWithRedis();
     }, 100);
@@ -170,14 +171,7 @@ export default function Home() {
     return () => clearTimeout(syncTimeout);
   }, [loadChatsFromCache, syncChatsWithRedis]);
 
-  // Periodic background sync (every 30 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      syncChatsWithRedis();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [syncChatsWithRedis]);
+  // REMOVED: Duplicate periodic 30-second sync (already removed from chat-store.ts)
 
   // Load current chat messages when chatId changes (cache-first)
   useEffect(() => {
@@ -629,26 +623,45 @@ export default function Home() {
 
           {/* Current Session Info */}
           <div className="p-3 border-t border-white/10">
+            {/* Chat History Toggle */}
+            <div className="mb-3 pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-white/70">
+                  <p className="font-medium">Chat History</p>
+                  <p className="text-[10px] text-white/50 mt-0.5">
+                    {isHistoryEnabled ? 'Syncing to cloud' : 'Disabled (no sync)'}
+                  </p>
+                </div>
+                <Switch
+                  checked={isHistoryEnabled}
+                  onCheckedChange={toggleHistory}
+                  aria-label="Toggle chat history"
+                />
+              </div>
+            </div>
+
             <div className="text-xs text-white/50 mb-3">
               <p className="font-medium mb-1">Current Session</p>
               <p className="truncate">ID: {chatId.slice(0, 8)}...</p>
               <p className="mt-0.5">Messages: {messages.length}</p>
 
               {/* Sync Status Indicator */}
-              <div className="mt-2 flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  syncStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' :
-                  syncStatus === 'synced' ? 'bg-green-500' :
-                  syncStatus === 'error' ? 'bg-red-500' :
-                  'bg-gray-500'
-                }`} />
-                <p className="text-[10px]">
-                  {syncStatus === 'syncing' ? 'Syncing...' :
-                   syncStatus === 'synced' ? 'Synced with cloud' :
-                   syncStatus === 'error' ? 'Sync error' :
-                   'Local cache'}
-                </p>
-              </div>
+              {isHistoryEnabled && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    syncStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' :
+                    syncStatus === 'synced' ? 'bg-green-500' :
+                    syncStatus === 'error' ? 'bg-red-500' :
+                    'bg-gray-500'
+                  }`} />
+                  <p className="text-[10px]">
+                    {syncStatus === 'syncing' ? 'Syncing...' :
+                     syncStatus === 'synced' ? 'Synced with cloud' :
+                     syncStatus === 'error' ? 'Sync error' :
+                     'Local cache'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Logout Button */}

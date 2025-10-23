@@ -27,10 +27,12 @@ export async function POST(req: Request) {
     // Parse request - now expecting only the last message and chat ID
     const {
       message,
-      id: chatId
+      id: chatId,
+      historyEnabled = true // Default to true for backward compatibility
     }: {
       message: UIMessage;
       id: string;
+      historyEnabled?: boolean;
     } = await req.json();
 
     // DEBUG: Log incoming message structure
@@ -40,18 +42,25 @@ export async function POST(req: Request) {
     console.log('🔍 [DEBUG] Message parts type:', typeof message.parts);
     console.log('🔍 [DEBUG] Message parts is array:', Array.isArray(message.parts));
 
-    // Load previous messages from Redis (with timeout handling)
+    // Load previous messages from Redis (with aggressive timeout to not block streaming)
     let previousMessages: UIMessage[];
-    try {
-      previousMessages = await Promise.race([
-        loadChat(chatId),
-        new Promise<UIMessage[]>((_, reject) =>
-          setTimeout(() => reject(new Error('Redis timeout')), 3000)
-        )
-      ]);
-    } catch (error) {
-      console.warn('Redis load timeout or error, starting fresh:', error);
+
+    if (!historyEnabled) {
+      console.log('⏭️ Skipping Redis load - chat history disabled by user');
       previousMessages = [];
+    } else {
+      try {
+        previousMessages = await Promise.race([
+          loadChat(chatId),
+          new Promise<UIMessage[]>((_, reject) =>
+            setTimeout(() => reject(new Error('Redis timeout')), 1000) // Reduced from 3s to 1s
+          )
+        ]);
+        console.log(`✅ Loaded ${previousMessages.length} previous messages from Redis`);
+      } catch (error) {
+        console.warn('⚠️ Redis load timeout or error, starting fresh:', error);
+        previousMessages = [];
+      }
     }
 
     // Combine previous messages with the new message
@@ -120,14 +129,22 @@ export async function POST(req: Request) {
         console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
         // Use Vercel AI SDK streamText with OpenAI
+        let streamBuffer = '';
         const result = streamText({
           model: openai('gpt-4o'),
           prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
           temperature: 0.3,
           maxOutputTokens: 4096,
+          onChunk: ({ chunk }) => {
+            // Log streaming chunks in real-time
+            if (chunk.type === 'text-delta') {
+              streamBuffer += chunk.text;
+              process.stdout.write(chunk.text);
+            }
+          },
         });
 
-        console.log(`✅ [PHASE 3] GPT-4o streaming directly to frontend`);
+        console.log(`🔄 [PHASE 3] GPT-4o streaming started...`);
 
         // Save metadata about the pipeline for analytics
         const metadata = {
@@ -154,11 +171,24 @@ export async function POST(req: Request) {
             'X-Target-Language': targetLanguage,
           },
           onFinish: async ({ messages: newMessages }) => {
+            console.log(`\n\n✅ [PHASE 3] GPT-4o streaming complete`);
+            console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
+            console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
+            console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
+
+            if (!historyEnabled) {
+              console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
+              return;
+            }
+
+            console.log(`💾 [SAVE] Attempting to save ${newMessages.length} messages for chat ${chatId}...`);
             try {
+              const saveStart = Date.now();
               await saveChat(chatId, newMessages);
-              console.log(`✅ Saved ${newMessages.length} messages for chat ${chatId}`);
+              const saveDuration = Date.now() - saveStart;
+              console.log(`✅ [SAVE] Saved ${newMessages.length} messages to Redis in ${saveDuration}ms`);
             } catch (error) {
-              console.error('Failed to save chat:', error);
+              console.error('❌ [SAVE] Failed to save chat to Redis:', error);
               // Don't throw - we don't want to break the stream
             }
           },
@@ -180,10 +210,18 @@ export async function POST(req: Request) {
     console.log(`🔄 [GEMINI] Using Gemini 2.5 Flash for text-only request`);
 
     // Stream the AI response with Gemini 2.5 Flash vision support
+    let streamBuffer = '';
     const result = streamText({
       model: google(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: convertToModelMessages(allMessages),
+      onChunk: ({ chunk }) => {
+        // Log streaming chunks in real-time
+        if (chunk.type === 'text-delta') {
+          streamBuffer += chunk.text;
+          process.stdout.write(chunk.text);
+        }
+      },
     });
 
     // Return the streaming response directly (no refusal checking)
@@ -198,11 +236,24 @@ export async function POST(req: Request) {
 
       // Save complete conversation history when stream finishes
       onFinish: async ({ messages }) => {
+        console.log(`\n\n✅ [GEMINI] Streaming complete`);
+        console.log(`📊 [GEMINI] Total output length: ${streamBuffer.length} characters`);
+        console.log(`📥 [GEMINI] FULL OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
+        console.log(`📥 [GEMINI] FULL OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
+
+        if (!historyEnabled) {
+          console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
+          return;
+        }
+
+        console.log(`💾 [SAVE] Attempting to save ${messages.length} messages for chat ${chatId}...`);
         try {
+          const saveStart = Date.now();
           await saveChat(chatId, messages);
-          console.log(`✅ Saved ${messages.length} messages for chat ${chatId}`);
+          const saveDuration = Date.now() - saveStart;
+          console.log(`✅ [SAVE] Saved ${messages.length} messages to Redis in ${saveDuration}ms`);
         } catch (error) {
-          console.error('Failed to save chat:', error);
+          console.error('❌ [SAVE] Failed to save chat to Redis:', error);
           // Don't throw - we don't want to break the stream
         }
       },

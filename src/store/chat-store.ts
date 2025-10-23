@@ -37,6 +37,10 @@ interface ChatState {
   lastSyncTime: number | null;
   syncError: string | null;
 
+  // History toggle state
+  isHistoryEnabled: boolean;
+  toggleHistory: () => void;
+
   // Actions
   loadChatsFromCache: () => void;
   syncChatsWithRedis: () => Promise<void>;
@@ -65,9 +69,37 @@ export const useChatStore = create<ChatState>()(
       syncStatus: 'idle',
       lastSyncTime: null,
       syncError: null,
+      isHistoryEnabled: false, // Disabled by default to save Redis costs
+
+      // Toggle history on/off
+      toggleHistory: () => {
+        const { isHistoryEnabled } = get();
+        const newValue = !isHistoryEnabled;
+
+        console.log(`📝 Chat history ${newValue ? 'enabled' : 'disabled'}`);
+
+        set({ isHistoryEnabled: newValue });
+
+        // If disabling, clear current state
+        if (!newValue) {
+          set({
+            chats: [],
+            syncStatus: 'idle',
+            lastSyncTime: null,
+          });
+        }
+      },
 
       // Load chats from local storage immediately (instant)
       loadChatsFromCache: () => {
+        const { isHistoryEnabled } = get();
+
+        // Skip if history is disabled
+        if (!isHistoryEnabled) {
+          set({ isLoadingChats: false });
+          return;
+        }
+
         try {
           // Proactively cleanup old chats on load to prevent quota issues
           cleanupOldChats();
@@ -85,7 +117,13 @@ export const useChatStore = create<ChatState>()(
 
       // Background sync with Redis
       syncChatsWithRedis: async () => {
-        const { chats: localChats, _setChats, _setSyncStatus } = get();
+        const { chats: localChats, _setChats, _setSyncStatus, isHistoryEnabled } = get();
+
+        // Skip if history is disabled
+        if (!isHistoryEnabled) {
+          console.log('⏭️ Skipping Redis sync - chat history disabled');
+          return;
+        }
 
         _setSyncStatus('syncing');
 
@@ -120,7 +158,15 @@ export const useChatStore = create<ChatState>()(
 
       // Load specific chat messages (with cache-first approach)
       loadChatMessages: async (chatId: string) => {
+        const { isHistoryEnabled } = get();
+
         set({ isLoadingMessages: true, currentChatId: chatId });
+
+        // Skip if history is disabled
+        if (!isHistoryEnabled) {
+          set({ isLoadingMessages: false, currentMessages: [] });
+          return;
+        }
 
         try {
           // Try cache first
@@ -235,9 +281,14 @@ export const useChatStore = create<ChatState>()(
 
       // Update current messages (e.g., from useChat hook)
       updateCurrentMessages: (messages: UIMessage[]) => {
-        const { currentChatId } = get();
+        const { currentChatId, isHistoryEnabled } = get();
 
         set({ currentMessages: messages });
+
+        // Skip caching if history is disabled
+        if (!isHistoryEnabled) {
+          return;
+        }
 
         // Cache the updated messages (cacheChat handles size limits internally)
         if (currentChatId && messages.length > 0) {
@@ -284,6 +335,7 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => ({
         currentChatId: state.currentChatId,
         lastSyncTime: state.lastSyncTime,
+        isHistoryEnabled: state.isHistoryEnabled,
       }),
       storage: createJSONStorage(() => sessionStorage),
     }
@@ -329,4 +381,5 @@ export const chatSelectors = {
   currentMessages: (state: ChatState) => state.currentMessages,
   syncStatus: (state: ChatState) => state.syncStatus,
   currentChatId: (state: ChatState) => state.currentChatId,
+  isHistoryEnabled: (state: ChatState) => state.isHistoryEnabled,
 };

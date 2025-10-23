@@ -12,9 +12,10 @@ import { loadChat, saveChat } from '@/lib/chat-store';
 // OCR + Translation pipeline imports
 import { processMultipleImagesOCR } from '@/lib/datalab-ocr';
 import {
-  translateMarkdown,
+  getTranslationPrompt,
   detectTargetLanguage,
 } from '@/lib/openai-translation';
+import { openai } from '@ai-sdk/openai';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -114,62 +115,58 @@ export async function POST(req: Request) {
 
         console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
 
-        // PHASE 3: GPT-4o TRANSLATION
-        console.log(`🔄 [PHASE 3] Starting GPT-4o translation...`);
+        // PHASE 3: GPT-4o TRANSLATION (STREAMING DIRECTLY TO FRONTEND)
+        console.log(`🔄 [PHASE 3] Starting GPT-4o translation streaming...`);
         console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
-        const translationResult = await translateMarkdown(
-          ocrResult.markdown,
-          targetLanguage
-        );
-
-        console.log(
-          `✅ [PHASE 3] Translation complete: ${translationResult.text.length} chars`
-        );
-        console.log(`📥 [PHASE 3] OUTPUT FROM TRANSLATION (first 1000 chars):\n${translationResult.text.substring(0, 1000)}\n`);
-        console.log(`📥 [PHASE 3] OUTPUT FROM TRANSLATION (last 500 chars):\n${translationResult.text.substring(Math.max(0, translationResult.text.length - 500))}\n`);
-
-        // PHASE 4: STREAM TRANSLATED TEXT TO USER
-        console.log(`📤 [PHASE 4] Streaming translation to user...`);
-
-        // Create a simple streaming response with the translated text
+        // Use Vercel AI SDK streamText with OpenAI
         const result = streamText({
-          model: google(MODEL_CONFIG.modelId),
-          system: `You are a document formatter. Your ONLY job is to output the provided translated document in clean markdown format.
-Do NOT add any commentary, explanations, or modifications.
-Simply output the translated text EXACTLY as provided, with proper markdown formatting.`,
-          prompt: `Output this translated document:\n\n${translationResult.text}`,
+          model: openai('gpt-4o'),
+          prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
+          temperature: 0.3,
+          maxOutputTokens: 4096,
+          onFinish: async ({ text }) => {
+            console.log(`✅ [TRANSLATION] Streaming complete: ${text.length} chars`);
+            console.log(`📥 [TRANSLATION] OUTPUT (first 1000 chars):\n${text.substring(0, 1000)}\n`);
+
+            // Save the complete conversation to Redis
+            const assistantMessage: UIMessage = {
+              id: createIdGenerator({ prefix: 'msg', size: 16 })(),
+              role: 'assistant',
+              parts: [{ type: 'text', text }],
+            };
+
+            const updatedMessages = [...allMessages, assistantMessage];
+
+            try {
+              await saveChat(chatId, updatedMessages);
+              console.log(`✅ Saved ${updatedMessages.length} messages for chat ${chatId}`);
+            } catch (error) {
+              console.error('Failed to save chat:', error);
+            }
+          },
         });
+
+        console.log(`✅ [PHASE 3] GPT-4o streaming directly to frontend`);
 
         // Save metadata about the pipeline for analytics
         const metadata = {
-          pipeline: 'datalab-surya-ocr + gpt-4o-translation',
+          pipeline: 'datalab-surya-ocr + gpt-4o-streaming',
           ocrModel: ocrResult.metadata.model,
           ocrRequestId: ocrResult.metadata.requestId,
           ocrConfidence: ocrResult.confidence,
-          translationModel: translationResult.metadata.model,
-          translationTokens: translationResult.metadata.tokensUsed,
-          targetLanguage: translationResult.targetLanguage,
-          processingTime:
-            ocrResult.metadata.processingTime +
-            translationResult.metadata.processingTime,
+          translationModel: 'gpt-4o',
+          targetLanguage: targetLanguage,
+          ocrProcessingTime: ocrResult.metadata.processingTime,
         };
 
         console.log(`📊 [PIPELINE] Metadata:`, metadata);
 
-        return result.toUIMessageStreamResponse({
-          originalMessages: allMessages,
-          generateMessageId: createIdGenerator({
-            prefix: 'msg',
-            size: 16,
-          }),
-          onFinish: async ({ messages }) => {
-            try {
-              await saveChat(chatId, messages);
-              console.log(`✅ Saved ${messages.length} messages for chat ${chatId}`);
-            } catch (error) {
-              console.error('Failed to save chat:', error);
-            }
+        // Return text stream response directly
+        return result.toTextStreamResponse({
+          headers: {
+            'X-Pipeline': 'surya-ocr-gpt4o',
+            'X-Target-Language': targetLanguage,
           },
         });
       } catch (error) {

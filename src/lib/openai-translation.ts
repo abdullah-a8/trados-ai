@@ -139,7 +139,7 @@ export function detectTargetLanguage(
 }
 
 /**
- * Translate markdown text using GPT-4o
+ * Translate markdown text using GPT-4o (non-streaming version)
  */
 export async function translateMarkdown(
   markdownText: string,
@@ -208,4 +208,32 @@ ${markdownText}`,
       `GPT-4o translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
+}
+
+/**
+ * Get translation prompt for GPT-4o
+ */
+export function getTranslationPrompt(
+  markdownText: string,
+  targetLang: TargetLanguage
+): string {
+  const targetLanguageName = LANGUAGE_NAMES[targetLang];
+
+  return `You are a professional translator. Translate the following text to ${targetLanguageName}.
+
+CRITICAL REQUIREMENTS:
+1. Provide a faithful and exact 1-to-1 official translation
+2. Do NOT make any changes, additions, or omissions in the translation
+3. Preserve the EXACT same format as the source text (markdown formatting, headings, tables, lists, etc.)
+4. Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
+5. Maintain the same structure and layout as the original
+6. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
+7. NEVER wrap the response in text blocks or any other formatting
+8. Output ONLY the translated text in markdown format directly
+9. Preserve all numbers, dates, identifiers, and formatting EXACTLY
+10. The output must be ready to display as-is, with the same format as the source
+
+Text to translate:
+
+${markdownText}`;
 }

@@ -16,7 +16,6 @@ import {
   updateCachedChatInList,
   removeCachedChat,
   validateAndMergeWithRedis,
-  isCacheValid,
   setupCrossTabSync,
   cleanupOldChats,
 } from '@/lib/chat-storage';
@@ -306,13 +305,12 @@ if (typeof window !== 'undefined') {
 export function useInitializeChatStore() {
   const loadChatsFromCache = useChatStore(state => state.loadChatsFromCache);
   const syncChatsWithRedis = useChatStore(state => state.syncChatsWithRedis);
-  const lastSyncTime = useChatStore(state => state.lastSyncTime);
 
   // Load from cache immediately on mount
   React.useEffect(() => {
     loadChatsFromCache();
 
-    // Then sync with Redis in background
+    // Then sync with Redis in background (ONLY on page load)
     const syncTimeout = setTimeout(() => {
       syncChatsWithRedis();
     }, 100); // Small delay to let cache load first
@@ -320,16 +318,8 @@ export function useInitializeChatStore() {
     return () => clearTimeout(syncTimeout);
   }, [loadChatsFromCache, syncChatsWithRedis]);
 
-  // Periodic background sync (every 30 seconds if cache is valid)
-  React.useEffect(() => {
-    if (!isCacheValid()) return;
-
-    const interval = setInterval(() => {
-      syncChatsWithRedis();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [syncChatsWithRedis, lastSyncTime]);
+  // REMOVED: Periodic 30-second sync to prevent excessive Redis requests
+  // Sync now only happens on page reload/mount
 }
 
 // Export selectors for optimized re-renders

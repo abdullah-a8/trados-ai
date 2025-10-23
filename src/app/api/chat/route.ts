@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import {
   streamText,
   convertToModelMessages,
@@ -16,6 +16,11 @@ import {
   detectTargetLanguage,
 } from '@/lib/openai-translation';
 import { openai } from '@ai-sdk/openai';
+
+// Initialize Google Generative AI with explicit API key
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+});
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -148,18 +153,45 @@ export async function POST(req: Request) {
         
         console.log(`✅ [MODEL SELECTION] Selected model: ${translationModel === 'gemini-2.5-flash' ? 'Google Gemini' : 'OpenAI GPT-4o'}`);
 
+        // Check for API keys
+        if (translationModel === 'gemini-2.5-flash') {
+          if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+            console.error('❌ [API KEY ERROR] No Google API key found');
+            console.error('❌ [API KEY ERROR] GOOGLE_GENERATIVE_AI_API_KEY is required for Gemini models');
+            throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
+          }
+          console.log(`✅ [API KEY] Google API key found (length: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY.substring(0, 10)}...)`);
+        } else {
+          if (!process.env.OPENAI_API_KEY) {
+            console.error('❌ [API KEY ERROR] No OpenAI API key found');
+            throw new Error('OPENAI_API_KEY environment variable is not set');
+          }
+          console.log(`✅ [API KEY] OpenAI API key found (length: ${process.env.OPENAI_API_KEY.substring(0, 10)}...)`);
+        }
+
         // Use Vercel AI SDK streamText with selected model
         let streamBuffer = '';
+        let chunkCount = 0;
+        
+        console.log(`🔄 [PHASE 3] Calling streamText with prompt length: ${getTranslationPrompt(ocrResult.markdown, targetLanguage).length} chars`);
+        
         const result = streamText({
           model: selectedModel,
           prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
           temperature: 0.3,
           maxOutputTokens: 4096,
           onChunk: ({ chunk }) => {
+            chunkCount++;
+            console.log(`📦 [CHUNK ${chunkCount}] Type: ${chunk.type}`);
+            
             // Log streaming chunks in real-time
             if (chunk.type === 'text-delta') {
               streamBuffer += chunk.text;
+              console.log(`📝 [TEXT-DELTA] Received ${chunk.text.length} chars`);
               process.stdout.write(chunk.text);
+            } else {
+              // Log any other chunk types for debugging
+              console.log(`📦 [OTHER CHUNK TYPE] ${chunk.type}:`, chunk);
             }
           },
         });
@@ -193,7 +225,9 @@ export async function POST(req: Request) {
           },
           onFinish: async ({ messages: newMessages }) => {
             console.log(`\n\n✅ [PHASE 3] ${translationModel} streaming complete`);
+            console.log(`📊 [PHASE 3] Total chunks received: ${chunkCount}`);
             console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
+            console.log(`📊 [PHASE 3] New messages count: ${newMessages.length}`);
             console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
             console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
 

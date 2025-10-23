@@ -28,12 +28,16 @@ export async function POST(req: Request) {
     const {
       message,
       id: chatId,
-      historyEnabled = true // Default to true for backward compatibility
+      historyEnabled = true, // Default to true for backward compatibility
+      translationModel = 'gpt-4o' // Default to GPT-4o
     }: {
       message: UIMessage;
       id: string;
       historyEnabled?: boolean;
+      translationModel?: string;
     } = await req.json();
+
+    console.log(`🎯 [MODEL] Selected translation model: ${translationModel}`);
 
     // DEBUG: Log incoming message structure
     console.log('\n🔍 [DEBUG] Incoming message structure:', JSON.stringify(message, null, 2));
@@ -124,14 +128,19 @@ export async function POST(req: Request) {
 
         console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
 
-        // PHASE 3: GPT-4o TRANSLATION (STREAMING DIRECTLY TO FRONTEND)
-        console.log(`🔄 [PHASE 3] Starting GPT-4o translation streaming...`);
+        // PHASE 3: TRANSLATION WITH SELECTED MODEL (STREAMING DIRECTLY TO FRONTEND)
+        console.log(`🔄 [PHASE 3] Starting ${translationModel} translation streaming...`);
         console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
-        // Use Vercel AI SDK streamText with OpenAI
+        // Select the appropriate model based on user choice
+        const selectedModel = translationModel === 'gemini-2.5-flash'
+          ? google(MODEL_CONFIG.modelId)
+          : openai('gpt-4o');
+
+        // Use Vercel AI SDK streamText with selected model
         let streamBuffer = '';
         const result = streamText({
-          model: openai('gpt-4o'),
+          model: selectedModel,
           prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
           temperature: 0.3,
           maxOutputTokens: 4096,
@@ -144,15 +153,15 @@ export async function POST(req: Request) {
           },
         });
 
-        console.log(`🔄 [PHASE 3] GPT-4o streaming started...`);
+        console.log(`🔄 [PHASE 3] ${translationModel} streaming started...`);
 
         // Save metadata about the pipeline for analytics
         const metadata = {
-          pipeline: 'datalab-surya-ocr + gpt-4o-streaming',
+          pipeline: `datalab-surya-ocr + ${translationModel}-streaming`,
           ocrModel: ocrResult.metadata.model,
           ocrRequestId: ocrResult.metadata.requestId,
           ocrConfidence: ocrResult.confidence,
-          translationModel: 'gpt-4o',
+          translationModel: translationModel,
           targetLanguage: targetLanguage,
           ocrProcessingTime: ocrResult.metadata.processingTime,
         };
@@ -167,11 +176,12 @@ export async function POST(req: Request) {
             size: 16,
           }),
           headers: {
-            'X-Pipeline': 'surya-ocr-gpt4o',
+            'X-Pipeline': `surya-ocr-${translationModel}`,
             'X-Target-Language': targetLanguage,
+            'X-Translation-Model': translationModel,
           },
           onFinish: async ({ messages: newMessages }) => {
-            console.log(`\n\n✅ [PHASE 3] GPT-4o streaming complete`);
+            console.log(`\n\n✅ [PHASE 3] ${translationModel} streaming complete`);
             console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
             console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
             console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);

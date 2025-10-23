@@ -121,15 +121,20 @@ export const useChatStore = create<ChatState>()(
 
       // Load specific chat messages (with cache-first approach)
       loadChatMessages: async (chatId: string) => {
-        set({ isLoadingMessages: true });
+        set({ isLoadingMessages: true, currentChatId: chatId });
 
         try {
           // Try cache first
           const cachedMessages = getCachedChat(chatId);
-          if (cachedMessages) {
+          if (cachedMessages && cachedMessages.length > 0) {
             set({
-              currentChatId: chatId,
               currentMessages: cachedMessages,
+              isLoadingMessages: false,
+            });
+          } else {
+            // No cache, clear messages immediately for new chats
+            set({
+              currentMessages: [],
               isLoadingMessages: false,
             });
           }
@@ -143,19 +148,20 @@ export const useChatStore = create<ChatState>()(
           const data = await response.json();
           const messages = data.messages as UIMessage[];
 
-          // Update if different from cache
-          if (JSON.stringify(messages) !== JSON.stringify(cachedMessages)) {
-            set({
-              currentChatId: chatId,
-              currentMessages: messages,
-            });
-            cacheChat(chatId, messages);
+          // Update if different from cache or if we have messages
+          if (messages && messages.length > 0) {
+            if (JSON.stringify(messages) !== JSON.stringify(cachedMessages)) {
+              set({
+                currentMessages: messages,
+              });
+              cacheChat(chatId, messages);
+            }
           }
 
           set({ isLoadingMessages: false });
         } catch (error) {
           console.error('Failed to load chat messages:', error);
-          set({ isLoadingMessages: false });
+          set({ isLoadingMessages: false, currentMessages: [] });
         }
       },
 

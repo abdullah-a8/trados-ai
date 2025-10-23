@@ -145,14 +145,17 @@ export default function Home() {
     }
   }, [chatId, loadChatMessages]);
 
-  // Sync loaded messages from store to useChat hook
+  // Sync loaded messages from store to useChat hook (only if it's the same chat)
   const currentMessages = useChatStore(chatSelectors.currentMessages);
+  const storeChatId = useChatStore(chatSelectors.currentChatId);
+
   useEffect(() => {
-    if (currentMessages.length > 0 && messages.length === 0) {
+    // Only sync if the store's chat ID matches current chat ID
+    if (currentMessages.length > 0 && messages.length === 0 && storeChatId === chatId) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setMessages(currentMessages as any);
     }
-  }, [currentMessages, messages.length, setMessages]);
+  }, [currentMessages, messages.length, setMessages, storeChatId, chatId]);
 
   // Sync current messages to cache whenever they change
   useEffect(() => {
@@ -221,10 +224,19 @@ export default function Home() {
   // Handle creating a new chat
   const handleNewChat = () => {
     const newId = nanoid();
+
+    // Clear messages first
+    setMessages([]);
+
+    // Reset title generation flag
+    hasGeneratedTitle.current = false;
+
+    // Clear store's current messages to prevent syncing old messages
+    updateCurrentMessages([]);
+
+    // Set new chat ID (this will trigger loadChatMessages, but it's a new ID with no cache)
     setChatId(newId);
     sessionStorage.setItem('currentChatId', newId);
-    setMessages([]);
-    hasGeneratedTitle.current = false;
   };
 
   // Handle loading a previous chat

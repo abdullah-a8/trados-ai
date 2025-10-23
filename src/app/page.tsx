@@ -14,6 +14,7 @@ import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";
 import { marked } from "marked";
+import { useChatStore, chatSelectors } from "@/store/chat-store";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -51,18 +52,34 @@ const TARGET_LANGUAGES = [
 
 export default function Home() {
   const router = useRouter();
+
+  // Zustand store selectors (optimized re-renders)
+  const chats = useChatStore(chatSelectors.chats);
+  const isLoadingChats = useChatStore(chatSelectors.isLoadingChats);
+  const syncStatus = useChatStore(chatSelectors.syncStatus);
+  const loadChatsFromCache = useChatStore(state => state.loadChatsFromCache);
+  const syncChatsWithRedis = useChatStore(state => state.syncChatsWithRedis);
+  const loadChatMessages = useChatStore(state => state.loadChatMessages);
+  const updateChat = useChatStore(state => state.updateChat);
+  const addChat = useChatStore(state => state.addChat);
+  const deleteChat = useChatStore(state => state.deleteChat);
+  const updateCurrentMessages = useChatStore(state => state.updateCurrentMessages);
+
+  // Local UI state
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [targetLanguage, setTargetLanguage] = useState<string>("fr");
-  const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
+
+  // Rename for backward compatibility
+  const chatHistory = chats;
+  const isLoadingHistory = isLoadingChats;
 
   // Session-aware chat ID management
   const [chatId, setChatId] = useState(() => {
@@ -99,43 +116,50 @@ export default function Home() {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load chat history list on mount
+  // Initialize chat store: Load from cache immediately, then sync with Redis
   useEffect(() => {
-    const loadChatsHistory = async () => {
-      try {
-        const response = await fetch(API_ROUTES.chats);
-        if (response.ok) {
-          const data = await response.json();
-          setChatHistory(data.chats || []);
-        }
-      } catch (error) {
-        console.error('Failed to load chat history:', error);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
+    // Load from local storage instantly
+    loadChatsFromCache();
 
-    loadChatsHistory();
-  }, []);
+    // Sync with Redis in background after a small delay
+    const syncTimeout = setTimeout(() => {
+      syncChatsWithRedis();
+    }, 100);
 
-  // Load current chat messages on mount or chat ID change
+    return () => clearTimeout(syncTimeout);
+  }, [loadChatsFromCache, syncChatsWithRedis]);
+
+  // Periodic background sync (every 30 seconds)
   useEffect(() => {
-    const loadChatMessages = async () => {
-      try {
-        const response = await fetch(`${API_ROUTES.chat}?id=${chatId}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load chat messages:', error);
-      }
-    };
+    const interval = setInterval(() => {
+      syncChatsWithRedis();
+    }, 30000); // 30 seconds
 
-    loadChatMessages();
-  }, [chatId, setMessages]);
+    return () => clearInterval(interval);
+  }, [syncChatsWithRedis]);
+
+  // Load current chat messages when chatId changes (cache-first)
+  useEffect(() => {
+    if (chatId) {
+      loadChatMessages(chatId);
+    }
+  }, [chatId, loadChatMessages]);
+
+  // Sync loaded messages from store to useChat hook
+  const currentMessages = useChatStore(chatSelectors.currentMessages);
+  useEffect(() => {
+    if (currentMessages.length > 0 && messages.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setMessages(currentMessages as any);
+    }
+  }, [currentMessages, messages.length, setMessages]);
+
+  // Sync current messages to cache whenever they change
+  useEffect(() => {
+    if (messages.length > 0 && chatId) {
+      updateCurrentMessages(messages);
+    }
+  }, [messages, chatId, updateCurrentMessages]);
 
   // Generate AI title after first exchange and add to sidebar
   useEffect(() => {
@@ -159,29 +183,29 @@ export default function Home() {
 
               if (titleResponse.ok) {
                 const { title } = await titleResponse.json();
+                const now = new Date().toISOString();
 
-                // Add the new chat to sidebar with AI-generated title
-                const newChat: StoredChat = {
-                  id: chatId,
-                  title,
-                  messages: [],
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
+                // Check if chat exists in store
+                const existingChat = chats.find(c => c.id === chatId);
 
-                setChatHistory(prev => {
-                  // Check if chat already exists (in case of race condition)
-                  if (prev.some(c => c.id === chatId)) {
-                    // Update existing
-                    return prev.map(chat =>
-                      chat.id === chatId
-                        ? { ...chat, title, updatedAt: new Date().toISOString() }
-                        : chat
-                    );
-                  }
-                  // Add new chat at the top
-                  return [newChat, ...prev];
-                });
+                if (existingChat) {
+                  // Update existing chat with title
+                  updateChat({
+                    id: chatId,
+                    title,
+                    updatedAt: now,
+                  });
+                } else {
+                  // Add new chat to store
+                  const newChat: StoredChat = {
+                    id: chatId,
+                    title,
+                    messages: [],
+                    createdAt: now,
+                    updatedAt: now,
+                  };
+                  addChat(newChat);
+                }
               }
             } catch (error) {
               console.error('Failed to generate title:', error);
@@ -192,7 +216,7 @@ export default function Home() {
     };
 
     generateTitleAndAddToSidebar();
-  }, [messages, chatId]);
+  }, [messages, chatId, chats, updateChat, addChat]);
 
   // Handle creating a new chat
   const handleNewChat = () => {
@@ -222,26 +246,21 @@ export default function Home() {
     }
   };
 
-  // Handle deleting a chat
+  // Handle deleting a chat (optimistic with rollback)
   const handleDeleteChat = async (chatIdToDelete: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering chat load
 
     try {
-      const response = await fetch(`${API_ROUTES.chats}?id=${chatIdToDelete}`, {
-        method: 'DELETE',
-      });
+      // Optimistically delete (Zustand store handles rollback on error)
+      await deleteChat(chatIdToDelete);
 
-      if (response.ok) {
-        // Remove from local state
-        setChatHistory(prev => prev.filter(chat => chat.id !== chatIdToDelete));
-
-        // If we deleted the current chat, create a new one
-        if (chatIdToDelete === chatId) {
-          handleNewChat();
-        }
+      // If we deleted the current chat, create a new one
+      if (chatIdToDelete === chatId) {
+        handleNewChat();
       }
     } catch (error) {
       console.error('Failed to delete chat:', error);
+      // Error already handled by store with rollback
     }
   };
 
@@ -561,6 +580,22 @@ export default function Home() {
               <p className="font-medium mb-1">Current Session</p>
               <p className="truncate">ID: {chatId.slice(0, 8)}...</p>
               <p className="mt-0.5">Messages: {messages.length}</p>
+
+              {/* Sync Status Indicator */}
+              <div className="mt-2 flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  syncStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' :
+                  syncStatus === 'synced' ? 'bg-green-500' :
+                  syncStatus === 'error' ? 'bg-red-500' :
+                  'bg-gray-500'
+                }`} />
+                <p className="text-[10px]">
+                  {syncStatus === 'syncing' ? 'Syncing...' :
+                   syncStatus === 'synced' ? 'Synced with cloud' :
+                   syncStatus === 'error' ? 'Sync error' :
+                   'Local cache'}
+                </p>
+              </div>
             </div>
 
             {/* Logout Button */}

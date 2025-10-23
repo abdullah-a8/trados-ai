@@ -35,17 +35,19 @@ interface DataLabInitialResponse {
  */
 interface DataLabStatusResponse {
   status: 'complete' | 'processing' | 'failed';
-  result?: {
-    markdown: string;
-    pages?: number;
+  success?: boolean;
+  pages?: Array<{
+    page: number;
     text_lines?: Array<{
       text: string;
       confidence?: number;
       bbox?: number[];
       polygon?: number[][];
     }>;
-  };
+  }>;
+  page_count?: number;
   error?: string;
+  total_cost?: number;
 }
 
 /**
@@ -249,16 +251,41 @@ export async function processImageOCR(
     // Step 2: Poll for results
     const resultData = await pollForResults(submitData.request_check_url, apiKey);
 
-    if (!resultData.result || !resultData.result.markdown) {
-      throw new Error('DataLab API returned no markdown result');
+    if (!resultData.pages || resultData.pages.length === 0) {
+      console.error('❌ [DataLab OCR] Invalid response structure:', JSON.stringify(resultData, null, 2));
+      throw new Error('DataLab API returned no pages in response');
     }
 
-    const extractedMarkdown = resultData.result.markdown;
-    const pages = resultData.result.pages || 1;
+    // Extract text from all pages and convert to markdown
+    let extractedMarkdown = '';
+    const allTextLines: Array<{ text: string; confidence?: number }> = [];
+
+    for (const page of resultData.pages) {
+      if (page.text_lines && page.text_lines.length > 0) {
+        // Collect all text lines with confidence scores
+        allTextLines.push(...page.text_lines);
+
+        // Join text lines with newlines to preserve structure
+        const pageText = page.text_lines.map(line => line.text).join('\n');
+
+        if (resultData.pages.length > 1) {
+          extractedMarkdown += `\n\n--- Page ${page.page} ---\n\n${pageText}`;
+        } else {
+          extractedMarkdown += pageText;
+        }
+      }
+    }
+
+    if (!extractedMarkdown.trim()) {
+      throw new Error('DataLab API returned empty text result');
+    }
+
+    const pageCount = resultData.page_count || resultData.pages.length;
 
     console.log(`✅ [DataLab OCR] Extraction complete`);
     console.log(`📊 [DataLab OCR] Extracted ${extractedMarkdown.length} characters`);
-    console.log(`📊 [DataLab OCR] Pages: ${pages}`);
+    console.log(`📊 [DataLab OCR] Pages: ${pageCount}`);
+    console.log(`📊 [DataLab OCR] Text lines: ${allTextLines.length}`);
     console.log(
       `📄 [DataLab OCR] OUTPUT (first 1000 chars):\n${extractedMarkdown.substring(0, 1000)}`
     );
@@ -267,10 +294,7 @@ export async function processImageOCR(
     );
 
     // Calculate confidence
-    const confidence = calculateOCRConfidence(
-      extractedMarkdown,
-      resultData.result.text_lines
-    );
+    const confidence = calculateOCRConfidence(extractedMarkdown, allTextLines);
 
     const processingTime = Date.now() - startTime;
 
@@ -280,7 +304,7 @@ export async function processImageOCR(
 
     return {
       markdown: extractedMarkdown,
-      pages,
+      pages: pageCount,
       confidence,
       metadata: {
         processingTime,

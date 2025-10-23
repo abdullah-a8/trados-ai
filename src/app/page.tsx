@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";
 import { marked } from "marked";
 import { useChatStore, chatSelectors } from "@/store/chat-store";
+import { ThinkingLoader, type ThinkingPhase } from "@/components/ThinkingLoader";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -73,6 +74,8 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [thinkingPhase, setThinkingPhase] = useState<ThinkingPhase>('general');
+  const [loadingStartTime, setLoadingStartTime] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
@@ -115,6 +118,44 @@ export default function Home() {
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  // Detect if the last user message has images (OCR pipeline will be used)
+  const lastUserMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const hasImages = lastUserMessage?.role === 'user'
+    ? lastUserMessage.parts.some(part => part.type === 'file' && part.mediaType?.startsWith('image/'))
+    : false;
+
+  // Track loading phases for better UX
+  useEffect(() => {
+    if (status === 'submitted') {
+      setLoadingStartTime(Date.now());
+
+      // Determine initial phase based on content
+      if (hasImages) {
+        setThinkingPhase('ocr');
+      } else {
+        setThinkingPhase('general');
+      }
+    }
+  }, [status, hasImages]);
+
+  // Auto-advance thinking phases for image-based requests
+  useEffect(() => {
+    if (!hasImages || status !== 'submitted') return;
+
+    const timers: NodeJS.Timeout[] = [];
+
+    // OCR phase: 0-30 seconds
+    timers.push(setTimeout(() => setThinkingPhase('ocr'), 0));
+
+    // Language detection: 30-35 seconds
+    timers.push(setTimeout(() => setThinkingPhase('language-detection'), 30000));
+
+    // Translation: 35+ seconds
+    timers.push(setTimeout(() => setThinkingPhase('translation'), 35000));
+
+    return () => timers.forEach(timer => clearTimeout(timer));
+  }, [hasImages, status]);
 
   // Initialize chat store: Load from cache immediately, then sync with Redis
   useEffect(() => {
@@ -924,26 +965,9 @@ export default function Home() {
                         </div>
                       );
                     })}
-                    {/* Only show thinking bubble when loading and no streaming message */}
+                    {/* Show thinking loader when loading and no streaming message */}
                     {isLoading && status === "submitted" && (
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                          <Image
-                            src="/trados-logo.svg"
-                            alt="AI"
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 animate-pulse"
-                          />
-                        </div>
-                        <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-[#2a2a2a]">
-                          <div className="flex gap-1">
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                          </div>
-                        </div>
-                      </div>
+                      <ThinkingLoader phase={thinkingPhase} />
                     )}
                     <div ref={messagesEndRef} />
                   </div>

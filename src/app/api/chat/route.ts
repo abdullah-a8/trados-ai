@@ -125,26 +125,6 @@ export async function POST(req: Request) {
           prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
           temperature: 0.3,
           maxOutputTokens: 4096,
-          onFinish: async ({ text }) => {
-            console.log(`✅ [TRANSLATION] Streaming complete: ${text.length} chars`);
-            console.log(`📥 [TRANSLATION] OUTPUT (first 1000 chars):\n${text.substring(0, 1000)}\n`);
-
-            // Save the complete conversation to Redis
-            const assistantMessage: UIMessage = {
-              id: createIdGenerator({ prefix: 'msg', size: 16 })(),
-              role: 'assistant',
-              parts: [{ type: 'text', text }],
-            };
-
-            const updatedMessages = [...allMessages, assistantMessage];
-
-            try {
-              await saveChat(chatId, updatedMessages);
-              console.log(`✅ Saved ${updatedMessages.length} messages for chat ${chatId}`);
-            } catch (error) {
-              console.error('Failed to save chat:', error);
-            }
-          },
         });
 
         console.log(`✅ [PHASE 3] GPT-4o streaming directly to frontend`);
@@ -162,11 +142,25 @@ export async function POST(req: Request) {
 
         console.log(`📊 [PIPELINE] Metadata:`, metadata);
 
-        // Return text stream response directly
-        return result.toTextStreamResponse({
+        // IMPORTANT: Use toUIMessageStreamResponse() for useChat hook compatibility
+        return result.toUIMessageStreamResponse({
+          originalMessages: allMessages,
+          generateMessageId: createIdGenerator({
+            prefix: 'msg',
+            size: 16,
+          }),
           headers: {
             'X-Pipeline': 'surya-ocr-gpt4o',
             'X-Target-Language': targetLanguage,
+          },
+          onFinish: async ({ messages: newMessages }) => {
+            try {
+              await saveChat(chatId, newMessages);
+              console.log(`✅ Saved ${newMessages.length} messages for chat ${chatId}`);
+            } catch (error) {
+              console.error('Failed to save chat:', error);
+              // Don't throw - we don't want to break the stream
+            }
           },
         });
       } catch (error) {

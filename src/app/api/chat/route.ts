@@ -161,6 +161,27 @@ export async function POST(req: Request) {
             throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
           }
           console.log(`✅ [API KEY] Google API key found (length: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY.substring(0, 10)}...)`);
+          
+          // Test the Google API with a simple request to verify it works
+          console.log(`🧪 [API TEST] Testing Google API with simple request...`);
+          try {
+            const testResult = await streamText({
+              model: selectedModel,
+              prompt: 'Say "Hello world" in English.',
+              temperature: 0.3,
+              maxOutputTokens: 50,
+            });
+            
+            let testText = '';
+            for await (const chunk of testResult.textStream) {
+              testText += chunk;
+            }
+            
+            console.log(`✅ [API TEST] Google API test successful! Response: "${testText}"`);
+          } catch (testError) {
+            console.error(`❌ [API TEST] Google API test failed:`, testError);
+            throw new Error(`Google API test failed: ${testError instanceof Error ? testError.message : 'Unknown error'}`);
+          }
         } else {
           if (!process.env.OPENAI_API_KEY) {
             console.error('❌ [API KEY ERROR] No OpenAI API key found');
@@ -172,82 +193,99 @@ export async function POST(req: Request) {
         // Use Vercel AI SDK streamText with selected model
         let streamBuffer = '';
         let chunkCount = 0;
+        let streamError: Error | null = null;
         
         console.log(`🔄 [PHASE 3] Calling streamText with prompt length: ${getTranslationPrompt(ocrResult.markdown, targetLanguage).length} chars`);
         
-        const result = streamText({
-          model: selectedModel,
-          prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-          onChunk: ({ chunk }) => {
-            chunkCount++;
-            console.log(`📦 [CHUNK ${chunkCount}] Type: ${chunk.type}`);
-            
-            // Log streaming chunks in real-time
-            if (chunk.type === 'text-delta') {
-              streamBuffer += chunk.text;
-              console.log(`📝 [TEXT-DELTA] Received ${chunk.text.length} chars`);
-              process.stdout.write(chunk.text);
-            } else {
-              // Log any other chunk types for debugging
-              console.log(`📦 [OTHER CHUNK TYPE] ${chunk.type}:`, chunk);
-            }
-          },
-        });
+        try {
+          const result = streamText({
+            model: selectedModel,
+            prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
+            temperature: 0.3,
+            maxOutputTokens: 4096,
+            onChunk: ({ chunk }) => {
+              chunkCount++;
+              console.log(`📦 [CHUNK ${chunkCount}] Type: ${chunk.type}`);
+              
+              // Log streaming chunks in real-time
+              if (chunk.type === 'text-delta') {
+                streamBuffer += chunk.text;
+                console.log(`📝 [TEXT-DELTA] Received ${chunk.text.length} chars`);
+                process.stdout.write(chunk.text);
+              } else {
+                // Log any other chunk types for debugging
+                console.log(`📦 [OTHER CHUNK TYPE] ${chunk.type}:`, JSON.stringify(chunk, null, 2));
+              }
+            },
+          });
 
-        console.log(`🔄 [PHASE 3] ${translationModel} streaming started...`);
+            console.log(`🔄 [PHASE 3] ${translationModel} streaming started...`);
 
-        // Save metadata about the pipeline for analytics
-        const metadata = {
-          pipeline: `datalab-surya-ocr + ${translationModel}-streaming`,
-          ocrModel: ocrResult.metadata.model,
-          ocrRequestId: ocrResult.metadata.requestId,
-          ocrConfidence: ocrResult.confidence,
-          translationModel: translationModel,
-          targetLanguage: targetLanguage,
-          ocrProcessingTime: ocrResult.metadata.processingTime,
-        };
+          // Save metadata about the pipeline for analytics
+          const metadata = {
+            pipeline: `datalab-surya-ocr + ${translationModel}-streaming`,
+            ocrModel: ocrResult.metadata.model,
+            ocrRequestId: ocrResult.metadata.requestId,
+            ocrConfidence: ocrResult.confidence,
+            translationModel: translationModel,
+            targetLanguage: targetLanguage,
+            ocrProcessingTime: ocrResult.metadata.processingTime,
+          };
 
-        console.log(`📊 [PIPELINE] Metadata:`, metadata);
+          console.log(`📊 [PIPELINE] Metadata:`, metadata);
 
-        // IMPORTANT: Use toUIMessageStreamResponse() for useChat hook compatibility
-        return result.toUIMessageStreamResponse({
-          originalMessages: allMessages,
-          generateMessageId: createIdGenerator({
-            prefix: 'msg',
-            size: 16,
-          }),
-          headers: {
-            'X-Pipeline': `surya-ocr-${translationModel}`,
-            'X-Target-Language': targetLanguage,
-            'X-Translation-Model': translationModel,
-          },
-          onFinish: async ({ messages: newMessages }) => {
-            console.log(`\n\n✅ [PHASE 3] ${translationModel} streaming complete`);
-            console.log(`📊 [PHASE 3] Total chunks received: ${chunkCount}`);
-            console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
-            console.log(`📊 [PHASE 3] New messages count: ${newMessages.length}`);
-            console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
-            console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
+          // IMPORTANT: Use toUIMessageStreamResponse() for useChat hook compatibility
+          return result.toUIMessageStreamResponse({
+            originalMessages: allMessages,
+            generateMessageId: createIdGenerator({
+              prefix: 'msg',
+              size: 16,
+            }),
+            headers: {
+              'X-Pipeline': `surya-ocr-${translationModel}`,
+              'X-Target-Language': targetLanguage,
+              'X-Translation-Model': translationModel,
+            },
+            onFinish: async ({ messages: newMessages }) => {
+              console.log(`\n\n✅ [PHASE 3] ${translationModel} streaming complete`);
+              console.log(`📊 [PHASE 3] Total chunks received: ${chunkCount}`);
+              console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
+              console.log(`📊 [PHASE 3] New messages count: ${newMessages.length}`);
+              
+              if (streamError) {
+                console.error(`❌ [PHASE 3] Stream error encountered:`, streamError);
+              }
+              
+              console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
+              console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
 
-            if (!historyEnabled) {
-              console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
-              return;
-            }
+              if (!historyEnabled) {
+                console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
+                return;
+              }
 
-            console.log(`💾 [SAVE] Attempting to save ${newMessages.length} messages for chat ${chatId}...`);
-            try {
-              const saveStart = Date.now();
-              await saveChat(chatId, newMessages);
-              const saveDuration = Date.now() - saveStart;
-              console.log(`✅ [SAVE] Saved ${newMessages.length} messages to Redis in ${saveDuration}ms`);
-            } catch (error) {
-              console.error('❌ [SAVE] Failed to save chat to Redis:', error);
-              // Don't throw - we don't want to break the stream
-            }
-          },
-        });
+              console.log(`💾 [SAVE] Attempting to save ${newMessages.length} messages for chat ${chatId}...`);
+              try {
+                const saveStart = Date.now();
+                await saveChat(chatId, newMessages);
+                const saveDuration = Date.now() - saveStart;
+                console.log(`✅ [SAVE] Saved ${newMessages.length} messages to Redis in ${saveDuration}ms`);
+              } catch (error) {
+                console.error('❌ [SAVE] Failed to save chat to Redis:', error);
+                // Don't throw - we don't want to break the stream
+              }
+            },
+          });
+        } catch (error) {
+          streamError = error as Error;
+          console.error('❌ [PHASE 3] Critical error in streamText:', error);
+          console.error('❌ [PHASE 3] Error details:', {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          });
+          throw error;
+        }
       } catch (error) {
         console.error('❌ [PIPELINE] Error:', error);
 

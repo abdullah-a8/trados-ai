@@ -25,6 +25,10 @@ export const maxDuration = 300;
 export async function POST(req: Request) {
   try {
     // Parse request - now expecting only the last message and chat ID
+    const body = await req.json();
+
+    console.log('\n📦 [DEBUG] Full request body:', JSON.stringify(body, null, 2));
+
     const {
       message,
       id: chatId,
@@ -35,9 +39,10 @@ export async function POST(req: Request) {
       id: string;
       historyEnabled?: boolean;
       translationModel?: string;
-    } = await req.json();
+    } = body;
 
     console.log(`🎯 [MODEL] Selected translation model: ${translationModel}`);
+    console.log(`📝 [MODEL] historyEnabled: ${historyEnabled}`);
 
     // DEBUG: Log incoming message structure
     console.log('\n🔍 [DEBUG] Incoming message structure:', JSON.stringify(message, null, 2));

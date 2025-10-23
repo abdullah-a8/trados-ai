@@ -112,29 +112,29 @@ export default function Home() {
 
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id: chatId, // Use the chat ID
-    body: {
-      // These will be merged with prepareSendMessagesRequest body
-      historyEnabled: isHistoryEnabled,
-      translationModel: translationModel,
-    },
     transport: new DefaultChatTransport({
       api: API_ROUTES.chat,
+      // Use function for body to get current values dynamically
+      body: () => ({
+        historyEnabled: isHistoryEnabled,
+        translationModel: translationModel,
+      }),
       // IMPORTANT: Only send the last message to reduce network traffic
       prepareSendMessagesRequest({ messages, id }) {
-        const requestBody = {
-          message: messages[messages.length - 1], // Only last message
-          id, // Chat ID
-          historyEnabled: isHistoryEnabled, // Let backend know if history is enabled
-          translationModel: translationModel // Pass selected translation model (captured reactively)
-        };
-
         console.log('🚀 [FRONTEND] Sending request with:', {
           translationModel,
-          historyEnabled,
+          historyEnabled: isHistoryEnabled,
           messageCount: messages.length,
         });
 
-        return { body: requestBody };
+        return {
+          body: {
+            message: messages[messages.length - 1], // Only last message
+            id, // Chat ID
+            historyEnabled: isHistoryEnabled, // Current value
+            translationModel: translationModel // Current value
+          }
+        };
       },
     }),
   });

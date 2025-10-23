@@ -222,16 +222,21 @@ export function getTranslationPrompt(
   return `You are a professional translator. Translate the following text to ${targetLanguageName}.
 
 CRITICAL REQUIREMENTS:
-1. Provide a faithful and exact 1-to-1 official translation
+1. Provide a faithful and exact 1-to-1 official translation that preserves the original meaning
 2. Do NOT make any changes, additions, or omissions in the translation
 3. Preserve the EXACT same format as the source text (markdown formatting, headings, tables, lists, etc.)
 4. Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
 5. Maintain the same structure and layout as the original
-6. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
-7. NEVER wrap the response in text blocks or any other formatting
-8. Output ONLY the translated text in markdown format directly
-9. Preserve all numbers, dates, identifiers, and formatting EXACTLY
-10. The output must be ready to display as-is, with the same format as the source
+6. Slightly improve readability by:
+   - Using natural, fluent phrasing in the target language
+   - Ensuring proper spacing and punctuation
+   - Making the text flow naturally while keeping the exact same meaning
+7. NEVER change the structure, format, or organization of the content
+8. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
+9. NEVER wrap the response in text blocks or any other formatting
+10. Output ONLY the translated text in markdown format directly
+11. Preserve all numbers, dates, identifiers, and formatting EXACTLY
+12. The output must be ready to display as-is, with the same format as the source
 
 Text to translate:
 

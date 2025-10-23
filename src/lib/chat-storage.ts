@@ -99,6 +99,7 @@ export function getCachedChatList(): StoredChat[] {
 
 /**
  * Cache the full chat list (limited to most recent)
+ * This is completely non-blocking - errors are silently handled
  */
 export function cacheChatList(chats: StoredChat[]): void {
   try {
@@ -108,19 +109,17 @@ export function cacheChatList(chats: StoredChat[]): void {
     updateCacheMetadata(limited.map(c => c.id));
   } catch (error) {
     if (error instanceof Error && error.name === 'QuotaExceededError') {
-      console.warn('Storage quota exceeded when caching chat list, clearing old data');
-      cleanupOldChats();
-      // Retry with even fewer chats
+      // Silently cleanup and retry with minimal data
       try {
-        const limited = chats.slice(0, 5);
+        cleanupOldChats();
+        const limited = chats.slice(0, 3);
         localStorage.setItem(STORAGE_KEYS.CHAT_LIST, JSON.stringify(limited));
         updateCacheMetadata(limited.map(c => c.id));
-      } catch (retryError) {
-        console.error('Failed to cache chat list after cleanup:', retryError);
+      } catch {
+        // Completely silent - caching is optional, don't block the app
       }
-    } else {
-      console.error('Failed to cache chat list:', error);
     }
+    // All errors are silent - caching is a performance optimization, not critical
   }
 }
 
@@ -140,6 +139,7 @@ export function getCachedChat(chatId: string): UIMessage[] | null {
 
 /**
  * Cache a specific chat's messages with size limits and quota handling
+ * This is completely non-blocking - errors are silently handled
  */
 export function cacheChat(chatId: string, messages: UIMessage[]): void {
   try {
@@ -167,20 +167,17 @@ export function cacheChat(chatId: string, messages: UIMessage[]): void {
 
     const serialized = JSON.stringify(strippedMessages);
 
-    // Check size before caching
+    // Check size before caching - silently skip if too large
     if (serialized.length > MAX_MESSAGE_SIZE) {
-      console.warn(`Chat ${chatId} too large to cache (${(serialized.length / 1024).toFixed(0)}KB), skipping`);
-      return;
+      return; // Silent skip - caching is optional
     }
 
     localStorage.setItem(key, serialized);
   } catch (error) {
     if (error instanceof Error && error.name === 'QuotaExceededError') {
-      console.warn(`Storage quota exceeded, cleaning up old chats...`);
-      cleanupOldChats();
-
-      // Retry once after cleanup
+      // Silently cleanup and retry once
       try {
+        cleanupOldChats();
         const key = `${STORAGE_KEYS.CHAT_PREFIX}${chatId}`;
         const strippedMessages = messages.map(msg => ({
           ...msg,
@@ -191,12 +188,11 @@ export function cacheChat(chatId: string, messages: UIMessage[]): void {
           ),
         }));
         localStorage.setItem(key, JSON.stringify(strippedMessages));
-      } catch (retryError) {
-        console.error(`Failed to cache chat ${chatId} after cleanup:`, retryError);
+      } catch {
+        // Completely silent - caching is optional, don't block the app
       }
-    } else {
-      console.error(`Failed to cache chat ${chatId}:`, error);
     }
+    // All errors are silent - caching is a performance optimization, not critical
   }
 }
 

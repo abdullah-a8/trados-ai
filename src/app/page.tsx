@@ -56,6 +56,7 @@ const TARGET_LANGUAGES = [
 const TRANSLATION_MODELS = [
   { value: "gpt-4o", label: "GPT-4o", provider: "OpenAI" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "Google" },
+  { value: "deepseek-chat", label: "DeepSeek Chat", provider: "DeepSeek" },
 ] as const;
 
 export default function Home() {

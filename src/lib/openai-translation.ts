@@ -158,19 +158,33 @@ export async function translateMarkdown(
       messages: [
         {
           role: 'user',
-          content: `You are a professional translator. Translate the following text to ${targetLanguageName}.
+          content: `You are a professional legal document translator. Translate the following text to ${targetLanguageName}.
 
-CRITICAL REQUIREMENTS:
-1. Provide a faithful and exact 1-to-1 official translation
-2. Do NOT make any changes, additions, or omissions in the translation
-3. Preserve the EXACT same format as the source text (markdown formatting, headings, tables, lists, etc.)
-4. Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
-5. Maintain the same structure and layout as the original
-6. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
-7. NEVER wrap the response in text blocks or any other formatting
-8. Output ONLY the translated text in markdown format directly
-9. Preserve all numbers, dates, identifiers, and formatting EXACTLY
-10. The output must be ready to display as-is, with the same format as the source
+CRITICAL REQUIREMENTS - TRANSLATION ACCURACY (HIGHEST PRIORITY):
+1. This is a LEGAL/OFFICIAL DOCUMENT - the translation must be accurate and suitable for official use
+2. Ensure COMPLETE ACCURACY in respect to legal terminology and context
+3. The translation MUST preserve the exact meaning and legal validity of the original text
+4. All information must be translated ACCURATELY and COMPLETELY as per the original text
+5. VERIFY that every piece of information from the original is correctly represented in the translation
+6. Do NOT make any additions or changes to the content
+7. OMISSIONS ARE ONLY ALLOWED to remove repetitions - if the OCR text contains duplicate information, include it only ONCE
+8. Preserve all numbers, dates, names, identifiers, legal terms, and technical details EXACTLY
+
+CRITICAL REQUIREMENTS - FORMATTING & FLOW (SECONDARY PRIORITY):
+9. After ensuring translation accuracy, apply proper formatting:
+   - Preserve the EXACT same structure and layout as the original document
+   - Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
+   - Maintain the natural flow of the original text
+10. NO REPETITIONS - ensure information flows naturally without duplicating any content
+11. Each piece of information should appear only ONCE, exactly as in the original
+12. The flow should match the original text structure - do not repeat sections, paragraphs, or sentences
+13. Use natural, fluent phrasing in the target language while maintaining legal precision
+
+OUTPUT REQUIREMENTS:
+14. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
+15. NEVER wrap the response in text blocks or any other formatting
+16. Output ONLY the translated text in markdown format directly
+17. The output must be ready to display as-is, suitable for official/legal document use
 
 Text to translate:
 
@@ -219,24 +233,33 @@ export function getTranslationPrompt(
 ): string {
   const targetLanguageName = LANGUAGE_NAMES[targetLang];
 
-  return `You are a professional translator. Translate the following text to ${targetLanguageName}.
+  return `You are a professional legal document translator. Translate the following text to ${targetLanguageName}.
 
-CRITICAL REQUIREMENTS:
-1. Provide a faithful and exact 1-to-1 official translation that preserves the original meaning
-2. Do NOT make any changes, additions, or omissions in the translation
-3. Preserve the EXACT same format as the source text (markdown formatting, headings, tables, lists, etc.)
-4. Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
-5. Maintain the same structure and layout as the original
-6. Slightly improve readability by:
-   - Using natural, fluent phrasing in the target language
-   - Ensuring proper spacing and punctuation
-   - Making the text flow naturally while keeping the exact same meaning
-7. NEVER change the structure, format, or organization of the content
-8. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
-9. NEVER wrap the response in text blocks or any other formatting
-10. Output ONLY the translated text in markdown format directly
-11. Preserve all numbers, dates, identifiers, and formatting EXACTLY
-12. The output must be ready to display as-is, with the same format as the source
+CRITICAL REQUIREMENTS - TRANSLATION ACCURACY (HIGHEST PRIORITY):
+1. This is a LEGAL/OFFICIAL DOCUMENT - the translation must be accurate and suitable for official use
+2. Ensure COMPLETE ACCURACY in respect to legal terminology and context
+3. The translation MUST preserve the exact meaning and legal validity of the original text
+4. All information must be translated ACCURATELY and COMPLETELY as per the original text
+5. VERIFY that every piece of information from the original is correctly represented in the translation
+6. Do NOT make any additions or changes to the content
+7. OMISSIONS ARE ONLY ALLOWED to remove repetitions - if the OCR text contains duplicate information, include it only ONCE
+8. Preserve all numbers, dates, names, identifiers, legal terms, and technical details EXACTLY
+
+CRITICAL REQUIREMENTS - FORMATTING & FLOW (SECONDARY PRIORITY):
+9. After ensuring translation accuracy, apply proper formatting:
+   - Preserve the EXACT same structure and layout as the original document
+   - Keep all markdown syntax intact (# headings, **bold**, | tables |, - lists, etc.)
+   - Maintain the natural flow of the original text
+10. NO REPETITIONS - ensure information flows naturally without duplicating any content
+11. Each piece of information should appear only ONCE, exactly as in the original
+12. The flow should match the original text structure - do not repeat sections, paragraphs, or sentences
+13. Use natural, fluent phrasing in the target language while maintaining legal precision
+
+OUTPUT REQUIREMENTS:
+14. NEVER wrap the response in markdown code blocks (\`\`\`markdown or \`\`\`)
+15. NEVER wrap the response in text blocks or any other formatting
+16. Output ONLY the translated text in markdown format directly
+17. The output must be ready to display as-is, suitable for official/legal document use
 
 Text to translate:
 

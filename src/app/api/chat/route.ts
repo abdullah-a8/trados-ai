@@ -16,6 +16,7 @@ import {
   detectTargetLanguage,
 } from '@/lib/openai-translation';
 import { openai } from '@ai-sdk/openai';
+import { deepseek } from '@ai-sdk/deepseek';
 
 // Initialize Google Generative AI with explicit API key
 const google = createGoogleGenerativeAI({
@@ -146,12 +147,18 @@ export async function POST(req: Request) {
         // Select the appropriate model based on user choice
         console.log(`🔍 [MODEL SELECTION] translationModel value: "${translationModel}"`);
         console.log(`🔍 [MODEL SELECTION] Checking if translationModel === 'gemini-2.5-flash': ${translationModel === 'gemini-2.5-flash'}`);
-        
-        const selectedModel = translationModel === 'gemini-2.5-flash'
-          ? google(MODEL_CONFIG.modelId)
-          : openai('gpt-4o');
-        
-        console.log(`✅ [MODEL SELECTION] Selected model: ${translationModel === 'gemini-2.5-flash' ? 'Google Gemini' : 'OpenAI GPT-4o'}`);
+        console.log(`🔍 [MODEL SELECTION] Checking if translationModel === 'deepseek-chat': ${translationModel === 'deepseek-chat'}`);
+
+        const selectedModel =
+          translationModel === 'gemini-2.5-flash' ? google(MODEL_CONFIG.modelId) :
+          translationModel === 'deepseek-chat' ? deepseek('deepseek-chat') :
+          openai('gpt-4o'); // Default to GPT-4o
+
+        console.log(`✅ [MODEL SELECTION] Selected model: ${
+          translationModel === 'gemini-2.5-flash' ? 'Google Gemini 2.5 Flash' :
+          translationModel === 'deepseek-chat' ? 'DeepSeek Chat' :
+          'OpenAI GPT-4o'
+        }`);
 
         // Check for API keys
         if (translationModel === 'gemini-2.5-flash') {
@@ -161,7 +168,7 @@ export async function POST(req: Request) {
             throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
           }
           console.log(`✅ [API KEY] Google API key found (length: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY.substring(0, 10)}...)`);
-          
+
           // Test the Google API with a simple request to verify it works
           console.log(`🧪 [API TEST] Testing Google API with simple request...`);
           try {
@@ -171,17 +178,23 @@ export async function POST(req: Request) {
               temperature: 0.3,
               maxOutputTokens: 50,
             });
-            
+
             let testText = '';
             for await (const chunk of testResult.textStream) {
               testText += chunk;
             }
-            
+
             console.log(`✅ [API TEST] Google API test successful! Response: "${testText}"`);
           } catch (testError) {
             console.error(`❌ [API TEST] Google API test failed:`, testError);
             throw new Error(`Google API test failed: ${testError instanceof Error ? testError.message : 'Unknown error'}`);
           }
+        } else if (translationModel === 'deepseek-chat') {
+          if (!process.env.DEEPSEEK_API_KEY) {
+            console.error('❌ [API KEY ERROR] No DeepSeek API key found');
+            throw new Error('DEEPSEEK_API_KEY environment variable is not set');
+          }
+          console.log(`✅ [API KEY] DeepSeek API key found (length: ${process.env.DEEPSEEK_API_KEY.substring(0, 10)}...)`);
         } else {
           if (!process.env.OPENAI_API_KEY) {
             console.error('❌ [API KEY ERROR] No OpenAI API key found');

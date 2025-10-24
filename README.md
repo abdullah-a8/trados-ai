@@ -1,5 +1,21 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and configure the required API keys:
+
+```bash
+cp .env.example .env.local
+```
+
+Required API keys:
+- **DATALAB_API_KEY**: Get from https://www.datalab.to/ (Surya OCR for multilingual image text extraction)
+- **OPENAI_API_KEY**: Get from https://platform.openai.com/api-keys (GPT-4o for translation)
+- **GOOGLE_GENERATIVE_AI_API_KEY**: Get from https://aistudio.google.com/app/apikey (Gemini 2.5 Flash)
+- **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN**: Get from https://console.upstash.com/ (chat history storage)
+- **AUTH_USERNAME** and **AUTH_PASSWORD**: Set your own credentials for authentication
+- **SESSION_SECRET**: Generate using `openssl rand -base64 32`
+
 ## Getting Started
 
 First, run the development server:

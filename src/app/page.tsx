@@ -3,16 +3,20 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, ArrowUp, Copy, Check, LogOut } from "lucide-react";
+import { PanelLeft, Plus, User, X, FileText, MessageSquarePlus, Trash2, Copy, Check, LogOut, Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { API_ROUTES, UI_CONFIG } from "@/config/constants";
+import { API_ROUTES } from "@/config/constants";
 import { Streamdown } from "streamdown";
 import { nanoid } from "nanoid";
 import { StoredChat } from "@/lib/redis";
 import { marked } from "marked";
+import { useChatStore, chatSelectors } from "@/store/chat-store";
+import { ThinkingLoader, type ThinkingPhase } from "@/components/ThinkingLoader";
 
 // Helper function to convert files to Data URLs
 async function convertFilesToDataURLs(files: FileList) {
@@ -41,19 +45,52 @@ async function convertFilesToDataURLs(files: FileList) {
   );
 }
 
+// Target language options for translation
+const TARGET_LANGUAGES = [
+  { value: "en-US", label: "English", flag: "🇺🇸" },
+  { value: "fr", label: "French", flag: "🇫🇷" },
+  { value: "ar", label: "Arabic", flag: "🇸🇦" },
+] as const;
+
 export default function Home() {
   const router = useRouter();
+
+  // Zustand store selectors (optimized re-renders)
+  const chats = useChatStore(chatSelectors.chats);
+  const isLoadingChats = useChatStore(chatSelectors.isLoadingChats);
+  const syncStatus = useChatStore(chatSelectors.syncStatus);
+  const isHistoryEnabled = useChatStore(chatSelectors.isHistoryEnabled);
+  const loadChatsFromCache = useChatStore(state => state.loadChatsFromCache);
+  const syncChatsWithRedis = useChatStore(state => state.syncChatsWithRedis);
+  const loadChatMessages = useChatStore(state => state.loadChatMessages);
+  const updateChat = useChatStore(state => state.updateChat);
+  const addChat = useChatStore(state => state.addChat);
+  const deleteChat = useChatStore(state => state.deleteChat);
+  const updateCurrentMessages = useChatStore(state => state.updateCurrentMessages);
+  const toggleHistory = useChatStore(state => state.toggleHistory);
+
+  // Local UI state
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [chatHistory, setChatHistory] = useState<StoredChat[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [targetLanguage, setTargetLanguage] = useState<string>("fr");
   const [isDragging, setIsDragging] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [thinkingPhase, setThinkingPhase] = useState<ThinkingPhase>('general');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
+
+  // Use ref to capture current value for useChat hook (prevents stale closures)
+  const isHistoryEnabledRef = useRef(isHistoryEnabled);
+
+  // Keep ref in sync with state
+  isHistoryEnabledRef.current = isHistoryEnabled;
+
+  // Rename for backward compatibility
+  const chatHistory = chats;
+  const isLoadingHistory = isLoadingChats;
 
   // Session-aware chat ID management
   const [chatId, setChatId] = useState(() => {
@@ -78,10 +115,15 @@ export default function Home() {
       api: API_ROUTES.chat,
       // IMPORTANT: Only send the last message to reduce network traffic
       prepareSendMessagesRequest({ messages, id }) {
+        // Use ref to get current value (prevents stale closure issue)
+        const currentHistoryEnabled = isHistoryEnabledRef.current;
+
         return {
           body: {
             message: messages[messages.length - 1], // Only last message
-            id // Chat ID
+            id, // Chat ID
+            historyEnabled: currentHistoryEnabled,
+            translationModel: 'deepseek-chat' // Always use DeepSeek Chat
           }
         };
       },
@@ -90,43 +132,82 @@ export default function Home() {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Load chat history list on mount
+  // Detect if the last user message has images (OCR pipeline will be used)
+  const lastUserMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const hasImages = lastUserMessage?.role === 'user'
+    ? lastUserMessage.parts.some(part => part.type === 'file' && part.mediaType?.startsWith('image/'))
+    : false;
+
+  // Track loading phases for better UX
   useEffect(() => {
-    const loadChatsHistory = async () => {
-      try {
-        const response = await fetch(API_ROUTES.chats);
-        if (response.ok) {
-          const data = await response.json();
-          setChatHistory(data.chats || []);
-        }
-      } catch (error) {
-        console.error('Failed to load chat history:', error);
-      } finally {
-        setIsLoadingHistory(false);
+    if (status === 'submitted') {
+      // Determine initial phase based on content
+      if (hasImages) {
+        setThinkingPhase('ocr');
+      } else {
+        setThinkingPhase('general');
       }
-    };
+    }
+  }, [status, hasImages]);
 
-    loadChatsHistory();
-  }, []);
-
-  // Load current chat messages on mount or chat ID change
+  // Auto-advance thinking phases for image-based requests
   useEffect(() => {
-    const loadChatMessages = async () => {
-      try {
-        const response = await fetch(`${API_ROUTES.chat}?id=${chatId}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load chat messages:', error);
-      }
-    };
+    if (!hasImages || status !== 'submitted') return;
 
-    loadChatMessages();
-  }, [chatId, setMessages]);
+    const timers: NodeJS.Timeout[] = [];
+
+    // OCR phase: 0-30 seconds
+    timers.push(setTimeout(() => setThinkingPhase('ocr'), 0));
+
+    // Language detection: 30-35 seconds
+    timers.push(setTimeout(() => setThinkingPhase('language-detection'), 30000));
+
+    // Translation: 35+ seconds
+    timers.push(setTimeout(() => setThinkingPhase('translation'), 35000));
+
+    return () => timers.forEach(timer => clearTimeout(timer));
+  }, [hasImages, status]);
+
+  // Initialize chat store: Load from cache immediately, then sync with Redis
+  useEffect(() => {
+    // Load from local storage instantly
+    loadChatsFromCache();
+
+    // Sync with Redis in background after a small delay (ONLY on page load)
+    const syncTimeout = setTimeout(() => {
+      syncChatsWithRedis();
+    }, 100);
+
+    return () => clearTimeout(syncTimeout);
+  }, [loadChatsFromCache, syncChatsWithRedis]);
+
+  // REMOVED: Duplicate periodic 30-second sync (already removed from chat-store.ts)
+
+  // Load current chat messages when chatId changes (cache-first)
+  useEffect(() => {
+    if (chatId) {
+      loadChatMessages(chatId);
+    }
+  }, [chatId, loadChatMessages]);
+
+  // Sync loaded messages from store to useChat hook (only if it's the same chat)
+  const currentMessages = useChatStore(chatSelectors.currentMessages);
+  const storeChatId = useChatStore(chatSelectors.currentChatId);
+
+  useEffect(() => {
+    // Only sync if the store's chat ID matches current chat ID
+    if (currentMessages.length > 0 && messages.length === 0 && storeChatId === chatId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setMessages(currentMessages as any);
+    }
+  }, [currentMessages, messages.length, setMessages, storeChatId, chatId]);
+
+  // Sync current messages to cache whenever they change
+  useEffect(() => {
+    if (messages.length > 0 && chatId) {
+      updateCurrentMessages(messages);
+    }
+  }, [messages, chatId, updateCurrentMessages]);
 
   // Generate AI title after first exchange and add to sidebar
   useEffect(() => {
@@ -150,29 +231,29 @@ export default function Home() {
 
               if (titleResponse.ok) {
                 const { title } = await titleResponse.json();
+                const now = new Date().toISOString();
 
-                // Add the new chat to sidebar with AI-generated title
-                const newChat: StoredChat = {
-                  id: chatId,
-                  title,
-                  messages: [],
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                };
+                // Check if chat exists in store
+                const existingChat = chats.find(c => c.id === chatId);
 
-                setChatHistory(prev => {
-                  // Check if chat already exists (in case of race condition)
-                  if (prev.some(c => c.id === chatId)) {
-                    // Update existing
-                    return prev.map(chat =>
-                      chat.id === chatId
-                        ? { ...chat, title, updatedAt: new Date().toISOString() }
-                        : chat
-                    );
-                  }
-                  // Add new chat at the top
-                  return [newChat, ...prev];
-                });
+                if (existingChat) {
+                  // Update existing chat with title
+                  updateChat({
+                    id: chatId,
+                    title,
+                    updatedAt: now,
+                  });
+                } else {
+                  // Add new chat to store
+                  const newChat: StoredChat = {
+                    id: chatId,
+                    title,
+                    messages: [],
+                    createdAt: now,
+                    updatedAt: now,
+                  };
+                  addChat(newChat);
+                }
               }
             } catch (error) {
               console.error('Failed to generate title:', error);
@@ -183,15 +264,24 @@ export default function Home() {
     };
 
     generateTitleAndAddToSidebar();
-  }, [messages, chatId]);
+  }, [messages, chatId, chats, updateChat, addChat]);
 
   // Handle creating a new chat
   const handleNewChat = () => {
     const newId = nanoid();
+
+    // Clear messages first
+    setMessages([]);
+
+    // Reset title generation flag
+    hasGeneratedTitle.current = false;
+
+    // Clear store's current messages to prevent syncing old messages
+    updateCurrentMessages([]);
+
+    // Set new chat ID (this will trigger loadChatMessages, but it's a new ID with no cache)
     setChatId(newId);
     sessionStorage.setItem('currentChatId', newId);
-    setMessages([]);
-    hasGeneratedTitle.current = false;
   };
 
   // Handle loading a previous chat
@@ -213,26 +303,21 @@ export default function Home() {
     }
   };
 
-  // Handle deleting a chat
+  // Handle deleting a chat (optimistic with rollback)
   const handleDeleteChat = async (chatIdToDelete: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering chat load
 
     try {
-      const response = await fetch(`${API_ROUTES.chats}?id=${chatIdToDelete}`, {
-        method: 'DELETE',
-      });
+      // Optimistically delete (Zustand store handles rollback on error)
+      await deleteChat(chatIdToDelete);
 
-      if (response.ok) {
-        // Remove from local state
-        setChatHistory(prev => prev.filter(chat => chat.id !== chatIdToDelete));
-
-        // If we deleted the current chat, create a new one
-        if (chatIdToDelete === chatId) {
-          handleNewChat();
-        }
+      // If we deleted the current chat, create a new one
+      if (chatIdToDelete === chatId) {
+        handleNewChat();
       }
     } catch (error) {
       console.error('Failed to delete chat:', error);
+      // Error already handled by store with rollback
     }
   };
 
@@ -418,9 +503,15 @@ export default function Home() {
     files.forEach(file => dataTransfer.items.add(file));
     const fileParts = files.length > 0 ? await convertFilesToDataURLs(dataTransfer.files) : [];
 
+    // Create message with explicit target language instruction
+    const translationInstruction = `Translate to ${TARGET_LANGUAGES.find(l => l.value === targetLanguage)?.label}`;
+    const messageText = input.trim()
+      ? `${translationInstruction}\n\n${input}`
+      : translationInstruction;
+
     sendMessage({
       role: "user",
-      parts: [{ type: "text", text: input }, ...fileParts],
+      parts: [{ type: "text", text: messageText }, ...fileParts],
     });
 
     setInput("");
@@ -542,10 +633,45 @@ export default function Home() {
 
           {/* Current Session Info */}
           <div className="p-3 border-t border-white/10">
+            {/* Chat History Toggle */}
+            <div className="mb-3 pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-white/70">
+                  <p className="font-medium">Chat History</p>
+                  <p className="text-[10px] text-white/50 mt-0.5">
+                    {isHistoryEnabled ? 'Syncing to cloud' : 'Disabled (no sync)'}
+                  </p>
+                </div>
+                <Switch
+                  checked={isHistoryEnabled}
+                  onCheckedChange={toggleHistory}
+                  aria-label="Toggle chat history"
+                />
+              </div>
+            </div>
+
             <div className="text-xs text-white/50 mb-3">
               <p className="font-medium mb-1">Current Session</p>
               <p className="truncate">ID: {chatId.slice(0, 8)}...</p>
               <p className="mt-0.5">Messages: {messages.length}</p>
+
+              {/* Sync Status Indicator */}
+              {isHistoryEnabled && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    syncStatus === 'syncing' ? 'bg-yellow-500 animate-pulse' :
+                    syncStatus === 'synced' ? 'bg-green-500' :
+                    syncStatus === 'error' ? 'bg-red-500' :
+                    'bg-gray-500'
+                  }`} />
+                  <p className="text-[10px]">
+                    {syncStatus === 'syncing' ? 'Syncing...' :
+                     syncStatus === 'synced' ? 'Synced with cloud' :
+                     syncStatus === 'error' ? 'Sync error' :
+                     'Local cache'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Logout Button */}
@@ -622,11 +748,11 @@ export default function Home() {
                   </h1>
                 </div>
 
-                {/* Message Input - Centered */}
-                <div className="w-full max-w-4xl mx-auto">
+                {/* Translation Input - Centered */}
+                <div className="w-full max-w-4xl mx-auto space-y-4">
                   {/* File Preview */}
                   {files.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
@@ -670,7 +796,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                  <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
                     {/* Hidden File Input */}
                     <input
                       type="file"
@@ -681,42 +807,66 @@ export default function Home() {
                       className="hidden"
                     />
 
-                    {/* Plus Button */}
+                    {/* File/Image Upload Button */}
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                      className="flex-shrink-0 h-[52px] w-[52px] rounded-full bg-[#2f2f2f] text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
                     >
-                      <Plus className="h-5 w-5" />
-                      <span className="sr-only">Attach</span>
+                      <Plus className="h-6 w-6" />
+                      <span className="sr-only">Attach files</span>
                     </Button>
 
-                    {/* Input Field */}
+                    {/* Text Input Field */}
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      placeholder="Enter text or upload document/image to translate..."
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="flex-1 h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] px-6 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
 
-                    {/* Send Button */}
+                    {/* Translate Button */}
                     <Button
                       type="submit"
-                      size="icon"
                       disabled={isLoading || (!input.trim() && files.length === 0)}
-                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                      className={`flex-shrink-0 h-[52px] px-8 rounded-full transition-all duration-200 font-medium ${
                         input.trim() || files.length > 0
-                          ? "bg-white text-black hover:bg-white/90"
-                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                          ? "bg-gradient-to-r from-[#8353fd] to-[#e60054] hover:from-[#6942ca] hover:to-[#eb3376] text-white"
+                          : "bg-white/10 text-white/30 cursor-not-allowed"
                       }`}
                     >
-                      <ArrowUp className="h-5 w-5" />
-                      <span className="sr-only">Send message</span>
+                      <Languages className="h-5 w-5 mr-2" />
+                      Translate
                     </Button>
                   </form>
+
+                  {/* Target Language & Model Selectors */}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-white/70">
+                        <Languages className="h-5 w-5" />
+                        <span className="text-sm font-medium">Translate to:</span>
+                      </div>
+                      <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                        <SelectTrigger className="w-[180px] h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TARGET_LANGUAGES.map((lang) => (
+                            <SelectItem key={lang.value} value={lang.value}>
+                              <span className="flex items-center gap-2">
+                                <span>{lang.flag}</span>
+                                <span>{lang.label}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -840,26 +990,9 @@ export default function Home() {
                         </div>
                       );
                     })}
-                    {/* Only show thinking bubble when loading and no streaming message */}
+                    {/* Show thinking loader when loading and no streaming message */}
                     {isLoading && status === "submitted" && (
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                          <Image
-                            src="/trados-logo.svg"
-                            alt="AI"
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 animate-pulse"
-                          />
-                        </div>
-                        <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-[#2a2a2a]">
-                          <div className="flex gap-1">
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                          </div>
-                        </div>
-                      </div>
+                      <ThinkingLoader phase={thinkingPhase} />
                     )}
                     <div ref={messagesEndRef} />
                   </div>
@@ -871,12 +1004,12 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Message Input - Fixed at Bottom */}
+              {/* Translation Input - Fixed at Bottom */}
               <div className="flex-shrink-0 border-t border-white/10 bg-[#212121] px-4 py-4">
-                <div className="w-full max-w-4xl mx-auto">
+                <div className="w-full max-w-4xl mx-auto space-y-3">
                   {/* File Preview */}
                   {files.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {filePreviewUrls.map(({ file, url }, index) => (
                         <div
                           key={index}
@@ -920,7 +1053,32 @@ export default function Home() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="relative flex items-center">
+                  {/* Target Language & Model Selectors */}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-white/70">
+                        <Languages className="h-5 w-5" />
+                        <span className="text-sm font-medium">Translate to:</span>
+                      </div>
+                      <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                        <SelectTrigger className="w-[180px] h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TARGET_LANGUAGES.map((lang) => (
+                            <SelectItem key={lang.value} value={lang.value}>
+                              <span className="flex items-center gap-2">
+                                <span>{lang.flag}</span>
+                                <span>{lang.label}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
                     {/* Hidden File Input */}
                     <input
                       type="file"
@@ -931,40 +1089,39 @@ export default function Home() {
                       className="hidden"
                     />
 
-                    {/* Plus Button */}
+                    {/* File/Image Upload Button */}
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute left-3 h-8 w-8 text-white/50 hover:bg-white/10 hover:text-white z-10"
+                      className="flex-shrink-0 h-[52px] w-[52px] rounded-full bg-[#2f2f2f] text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
                     >
-                      <Plus className="h-5 w-5" />
-                      <span className="sr-only">Attach</span>
+                      <Plus className="h-6 w-6" />
+                      <span className="sr-only">Attach files</span>
                     </Button>
 
-                    {/* Input Field */}
+                    {/* Text Input Field */}
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={UI_CONFIG.chat.inputPlaceholder}
+                      placeholder="Enter text or upload document/image to translate..."
                       disabled={isLoading}
-                      className="w-full h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] pl-14 pr-14 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
+                      className="flex-1 h-[52px] rounded-[26px] border-0 bg-[#2f2f2f] px-6 text-[15px] text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-lg disabled:opacity-50"
                     />
 
-                    {/* Send Button */}
+                    {/* Translate Button */}
                     <Button
                       type="submit"
-                      size="icon"
                       disabled={isLoading || (!input.trim() && files.length === 0)}
-                      className={`absolute right-2 h-9 w-9 rounded-full transition-all duration-200 ${
+                      className={`flex-shrink-0 h-[52px] px-8 rounded-full transition-all duration-200 font-medium ${
                         input.trim() || files.length > 0
-                          ? "bg-white text-black hover:bg-white/90"
-                          : "bg-white/10 text-white/30 hover:bg-white/20"
+                          ? "bg-gradient-to-r from-[#8353fd] to-[#e60054] hover:from-[#6942ca] hover:to-[#eb3376] text-white"
+                          : "bg-white/10 text-white/30 cursor-not-allowed"
                       }`}
                     >
-                      <ArrowUp className="h-5 w-5" />
-                      <span className="sr-only">Send message</span>
+                      <Languages className="h-5 w-5 mr-2" />
+                      Translate
                     </Button>
                   </form>
                 </div>

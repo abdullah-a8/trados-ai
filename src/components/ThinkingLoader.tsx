@@ -99,14 +99,6 @@ export function ThinkingLoader({ phase = 'general', className = '' }: ThinkingLo
       {/* Thinking message bubble */}
       <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-[#2a2a2a] border border-white/5">
         <div className="flex flex-col gap-2">
-          {/* Phase indicator badge */}
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`h-1.5 w-1.5 rounded-full bg-gradient-to-r ${phaseColor} animate-pulse`}></div>
-            <span className="text-xs text-white/50 uppercase tracking-wider">
-              {phase === 'language-detection' ? 'Language Detection' : phase.replace('-', ' ')}
-            </span>
-          </div>
-
           {/* Animated thinking text */}
           <div
             className={`text-[15px] text-white/90 font-medium transition-all duration-300 ${

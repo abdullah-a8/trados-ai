@@ -85,8 +85,6 @@ async function pollForResults(
   while (attempt < maxAttempts) {
     attempt++;
 
-    console.log(`🔄 [DataLab OCR] Polling attempt ${attempt}/${maxAttempts}...`);
-
     try {
       const response = await fetch(checkUrl, {
         method: 'GET',
@@ -102,7 +100,6 @@ async function pollForResults(
       const data: DataLabStatusResponse = await response.json();
 
       if (data.status === 'complete') {
-        console.log(`✅ [DataLab OCR] Processing complete!`);
         return data;
       }
 
@@ -111,13 +108,11 @@ async function pollForResults(
       }
 
       // Still processing, wait before next poll
-      console.log(`⏳ [DataLab OCR] Still processing... waiting ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       // Exponential backoff with cap at 10 seconds
       delay = Math.min(delay * 1.2, 10000);
     } catch (error) {
-      console.error(`❌ [DataLab OCR] Polling error on attempt ${attempt}:`, error);
 
       // If we're not at max attempts, retry after delay
       if (attempt < maxAttempts) {
@@ -198,8 +193,6 @@ export async function processImageOCR(
   const startTime = Date.now();
 
   try {
-    console.log(`🔍 [DataLab OCR] Starting Surya OCR for ${mediaType} image`);
-
     // Get API key
     const apiKey = process.env.DATALAB_API_KEY;
     if (!apiKey) {
@@ -211,14 +204,10 @@ export async function processImageOCR(
       ? imageBase64
       : `data:${mediaType};base64,${imageBase64}`;
 
-    console.log(`📊 [DataLab OCR] Image size: ${imageBase64.length} bytes (base64)`);
-    console.log(`📊 [DataLab OCR] Media type: ${mediaType}`);
-
     // Convert to File object for multipart upload
     const file = dataURLtoFile(dataUrl, 'document.png');
 
     // Step 1: Submit OCR request
-    console.log(`🔄 [DataLab OCR] Submitting to DataLab API...`);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -244,15 +233,10 @@ export async function processImageOCR(
       throw new Error(`DataLab API error: ${submitData.error || 'Unknown error'}`);
     }
 
-    console.log(`✅ [DataLab OCR] Request submitted successfully`);
-    console.log(`📋 [DataLab OCR] Request ID: ${submitData.request_id}`);
-    console.log(`🔗 [DataLab OCR] Check URL: ${submitData.request_check_url}`);
-
     // Step 2: Poll for results
     const resultData = await pollForResults(submitData.request_check_url, apiKey);
 
     if (!resultData.pages || resultData.pages.length === 0) {
-      console.error('❌ [DataLab OCR] Invalid response structure:', JSON.stringify(resultData, null, 2));
       throw new Error('DataLab API returned no pages in response');
     }
 
@@ -282,25 +266,10 @@ export async function processImageOCR(
 
     const pageCount = resultData.page_count || resultData.pages.length;
 
-    console.log(`✅ [DataLab OCR] Extraction complete`);
-    console.log(`📊 [DataLab OCR] Extracted ${extractedMarkdown.length} characters`);
-    console.log(`📊 [DataLab OCR] Pages: ${pageCount}`);
-    console.log(`📊 [DataLab OCR] Text lines: ${allTextLines.length}`);
-    console.log(
-      `📄 [DataLab OCR] OUTPUT (first 1000 chars):\n${extractedMarkdown.substring(0, 1000)}`
-    );
-    console.log(
-      `📄 [DataLab OCR] OUTPUT (last 500 chars):\n${extractedMarkdown.substring(Math.max(0, extractedMarkdown.length - 500))}`
-    );
-
     // Calculate confidence
     const confidence = calculateOCRConfidence(extractedMarkdown, allTextLines);
 
     const processingTime = Date.now() - startTime;
-
-    console.log(
-      `✅ [DataLab OCR] Complete in ${processingTime}ms (confidence: ${confidence})`
-    );
 
     return {
       markdown: extractedMarkdown,
@@ -329,22 +298,18 @@ export async function processMultipleImagesOCR(
 ): Promise<OCRResult> {
   const startTime = Date.now();
 
-  console.log(`🔍 [DataLab OCR] Processing ${images.length} images with Surya OCR...`);
-
   const results: OCRResult[] = [];
   const errors: string[] = [];
 
   // Process images sequentially
   for (let i = 0; i < images.length; i++) {
     const img = images[i];
-    console.log(`📄 [DataLab OCR] Processing image ${i + 1}/${images.length}...`);
 
     try {
       const result = await processImageOCR(img.data, img.mediaType);
       results.push(result);
     } catch (error) {
       const errorMsg = `Image ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      console.error(`❌ [DataLab OCR] ${errorMsg}`);
       errors.push(errorMsg);
     }
   }
@@ -363,13 +328,6 @@ export async function processMultipleImagesOCR(
     })
     .join('\n\n---\n\n');
 
-  console.log(
-    `📄 [DataLab OCR] COMBINED OUTPUT (first 1000 chars):\n${combinedMarkdown.substring(0, 1000)}`
-  );
-  console.log(
-    `📄 [DataLab OCR] COMBINED OUTPUT (last 500 chars):\n${combinedMarkdown.substring(Math.max(0, combinedMarkdown.length - 500))}`
-  );
-
   // Calculate overall confidence (minimum of all confidences)
   const overallConfidence =
     results.every((r) => r.confidence === 'high')
@@ -380,14 +338,6 @@ export async function processMultipleImagesOCR(
 
   const totalPages = results.reduce((sum, r) => sum + r.pages, 0);
   const processingTime = Date.now() - startTime;
-
-  console.log(
-    `✅ [DataLab OCR] All images processed in ${processingTime}ms (${results.length}/${images.length} successful)`
-  );
-
-  if (errors.length > 0) {
-    console.warn(`⚠️ [DataLab OCR] ${errors.length} image(s) failed:`, errors);
-  }
 
   return {
     markdown: combinedMarkdown,

@@ -76,8 +76,6 @@ export const useChatStore = create<ChatState>()(
         const { isHistoryEnabled } = get();
         const newValue = !isHistoryEnabled;
 
-        console.log(`📝 Chat history ${newValue ? 'enabled' : 'disabled'}`);
-
         set({ isHistoryEnabled: newValue });
 
         // If disabling, clear current state
@@ -121,7 +119,6 @@ export const useChatStore = create<ChatState>()(
 
         // Skip if history is disabled
         if (!isHistoryEnabled) {
-          console.log('⏭️ Skipping Redis sync - chat history disabled');
           return;
         }
 

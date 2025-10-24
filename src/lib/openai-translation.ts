@@ -148,8 +148,6 @@ export async function translateMarkdown(
   const startTime = Date.now();
 
   try {
-    console.log(`🌍 [TRANSLATION] Translating to ${targetLang} using GPT-4o...`);
-
     const targetLanguageName = LANGUAGE_NAMES[targetLang];
 
     // GPT-4o translation with strict format preservation instructions
@@ -200,13 +198,6 @@ ${markdownText}`,
 
     const processingTime = Date.now() - startTime;
 
-    console.log(
-      `✅ [TRANSLATION] Complete in ${processingTime}ms (${translatedText.length} chars)`
-    );
-    console.log(`📊 [TRANSLATION] Tokens used: ${tokensUsed}`);
-    console.log(`📥 [TRANSLATION] OUTPUT (first 1000 chars):\n${translatedText.substring(0, 1000)}\n`);
-    console.log(`📥 [TRANSLATION] OUTPUT (last 500 chars):\n${translatedText.substring(Math.max(0, translatedText.length - 500))}\n`);
-
     return {
       text: translatedText,
       targetLanguage: targetLang,
@@ -217,7 +208,7 @@ ${markdownText}`,
       },
     };
   } catch (error) {
-    console.error('❌ [TRANSLATION] Error:', error);
+    console.error('Translation error:', error);
     throw new Error(
       `GPT-4o translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );

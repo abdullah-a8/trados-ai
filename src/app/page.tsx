@@ -52,13 +52,6 @@ const TARGET_LANGUAGES = [
   { value: "ar", label: "Arabic", flag: "🇸🇦" },
 ] as const;
 
-// Translation model options
-const TRANSLATION_MODELS = [
-  { value: "gpt-4o", label: "GPT-4o", provider: "OpenAI" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "Google" },
-  { value: "deepseek-chat", label: "DeepSeek Chat", provider: "DeepSeek" },
-] as const;
-
 export default function Home() {
   const router = useRouter();
 
@@ -81,7 +74,6 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [targetLanguage, setTargetLanguage] = useState<string>("fr");
-  const [translationModel, setTranslationModel] = useState<string>("gpt-4o");
   const [isDragging, setIsDragging] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -89,13 +81,11 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasGeneratedTitle = useRef(false);
   const dragCounter = useRef(0);
-  
-  // Use refs to capture current values for useChat hook (prevents stale closures)
-  const translationModelRef = useRef(translationModel);
+
+  // Use ref to capture current value for useChat hook (prevents stale closures)
   const isHistoryEnabledRef = useRef(isHistoryEnabled);
-  
-  // Keep refs in sync with state
-  translationModelRef.current = translationModel;
+
+  // Keep ref in sync with state
   isHistoryEnabledRef.current = isHistoryEnabled;
 
   // Rename for backward compatibility
@@ -125,22 +115,15 @@ export default function Home() {
       api: API_ROUTES.chat,
       // IMPORTANT: Only send the last message to reduce network traffic
       prepareSendMessagesRequest({ messages, id }) {
-        // Use refs to get current values (prevents stale closure issue)
-        const currentTranslationModel = translationModelRef.current;
+        // Use ref to get current value (prevents stale closure issue)
         const currentHistoryEnabled = isHistoryEnabledRef.current;
-        
-        console.log('🚀 [FRONTEND] Sending request with:', {
-          translationModel: currentTranslationModel,
-          historyEnabled: currentHistoryEnabled,
-          messageCount: messages.length,
-        });
 
         return {
           body: {
             message: messages[messages.length - 1], // Only last message
             id, // Chat ID
             historyEnabled: currentHistoryEnabled,
-            translationModel: currentTranslationModel
+            translationModel: 'deepseek-chat' // Always use DeepSeek Chat
           }
         };
       },
@@ -883,27 +866,6 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-white/70">
-                        <span className="text-sm font-medium">Model:</span>
-                      </div>
-                      <Select value={translationModel} onValueChange={setTranslationModel}>
-                        <SelectTrigger className="w-[200px] h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TRANSLATION_MODELS.map((model) => (
-                            <SelectItem key={model.value} value={model.value}>
-                              <span className="flex flex-col items-start">
-                                <span className="font-medium">{model.label}</span>
-                                <span className="text-xs text-white/50">{model.provider}</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1108,27 +1070,6 @@ export default function Home() {
                               <span className="flex items-center gap-2">
                                 <span>{lang.flag}</span>
                                 <span>{lang.label}</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-white/70">
-                        <span className="text-sm font-medium">Model:</span>
-                      </div>
-                      <Select value={translationModel} onValueChange={setTranslationModel}>
-                        <SelectTrigger className="w-[200px] h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TRANSLATION_MODELS.map((model) => (
-                            <SelectItem key={model.value} value={model.value}>
-                              <span className="flex flex-col items-start">
-                                <span className="font-medium">{model.label}</span>
-                                <span className="text-xs text-white/50">{model.provider}</span>
                               </span>
                             </SelectItem>
                           ))}

@@ -33,8 +33,6 @@ export async function POST(req: Request) {
     // Parse request - now expecting only the last message and chat ID
     const body = await req.json();
 
-    console.log('\n📦 [DEBUG] Full request body:', JSON.stringify(body, null, 2));
-
     const {
       message,
       id: chatId,
@@ -47,22 +45,10 @@ export async function POST(req: Request) {
       translationModel?: string;
     } = body;
 
-    console.log(`🎯 [MODEL] Request body translationModel: ${body.translationModel}`);
-    console.log(`🎯 [MODEL] Selected translation model: ${translationModel}`);
-    console.log(`📝 [MODEL] historyEnabled: ${historyEnabled}`);
-
-    // DEBUG: Log incoming message structure
-    console.log('\n🔍 [DEBUG] Incoming message structure:', JSON.stringify(message, null, 2));
-    console.log('🔍 [DEBUG] Message role:', message.role);
-    console.log('🔍 [DEBUG] Message has parts:', 'parts' in message);
-    console.log('🔍 [DEBUG] Message parts type:', typeof message.parts);
-    console.log('🔍 [DEBUG] Message parts is array:', Array.isArray(message.parts));
-
     // Load previous messages from Redis (with aggressive timeout to not block streaming)
     let previousMessages: UIMessage[];
 
     if (!historyEnabled) {
-      console.log('⏭️ Skipping Redis load - chat history disabled by user');
       previousMessages = [];
     } else {
       try {
@@ -72,9 +58,7 @@ export async function POST(req: Request) {
             setTimeout(() => reject(new Error('Redis timeout')), 1000) // Reduced from 3s to 1s
           )
         ]);
-        console.log(`✅ Loaded ${previousMessages.length} previous messages from Redis`);
-      } catch (error) {
-        console.warn('⚠️ Redis load timeout or error, starting fresh:', error);
+      } catch {
         previousMessages = [];
       }
     }
@@ -93,13 +77,8 @@ export async function POST(req: Request) {
     );
 
     if (imageParts.length > 0) {
-      console.log(
-        `📸 [PIPELINE] Detected ${imageParts.length} images - using OCR + Translation pipeline`
-      );
-
       try {
         // PHASE 1: DataLab Surya OCR
-        console.log(`🔍 [PHASE 1] Starting DataLab Surya OCR...`);
         const ocrResult = await processMultipleImagesOCR(
           imageParts.map((part) => ({
             data: part.url.split('base64,')[1] || part.url, // Remove data URL prefix
@@ -107,17 +86,7 @@ export async function POST(req: Request) {
           }))
         );
 
-        console.log(
-          `✅ [PHASE 1] OCR complete: ${ocrResult.markdown.length} chars, confidence: ${ocrResult.confidence}`
-        );
-        console.log(
-          `📊 [PHASE 1] Model: ${ocrResult.metadata.model}, Request ID: ${ocrResult.metadata.requestId}`
-        );
-        console.log(`\n📄 [PHASE 1] OCR OUTPUT (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
-        console.log(`📄 [PHASE 1] OCR OUTPUT (last 500 chars):\n${ocrResult.markdown.substring(Math.max(0, ocrResult.markdown.length - 500))}\n`);
-
         // PHASE 2: DETECT TARGET LANGUAGE
-        console.log(`🌍 [PHASE 2] Detecting target language...`);
 
         // Extract target language from message if explicitly specified
         const textParts = message.parts
@@ -138,114 +107,38 @@ export async function POST(req: Request) {
           targetLanguage = detectTargetLanguage(message, previousMessages);
         }
 
-        console.log(`✅ [PHASE 2] Target language: ${targetLanguage}`);
-
         // PHASE 3: TRANSLATION WITH SELECTED MODEL (STREAMING DIRECTLY TO FRONTEND)
-        console.log(`🔄 [PHASE 3] Starting ${translationModel} translation streaming...`);
-        console.log(`📤 [PHASE 3] INPUT TO TRANSLATION (first 1000 chars):\n${ocrResult.markdown.substring(0, 1000)}\n`);
 
         // Select the appropriate model based on user choice
-        console.log(`🔍 [MODEL SELECTION] translationModel value: "${translationModel}"`);
-        console.log(`🔍 [MODEL SELECTION] Checking if translationModel === 'gemini-2.5-flash': ${translationModel === 'gemini-2.5-flash'}`);
-        console.log(`🔍 [MODEL SELECTION] Checking if translationModel === 'deepseek-chat': ${translationModel === 'deepseek-chat'}`);
-
         const selectedModel =
           translationModel === 'gemini-2.5-flash' ? google(MODEL_CONFIG.modelId) :
           translationModel === 'deepseek-chat' ? deepseek('deepseek-chat') :
           openai('gpt-4o'); // Default to GPT-4o
 
-        console.log(`✅ [MODEL SELECTION] Selected model: ${
-          translationModel === 'gemini-2.5-flash' ? 'Google Gemini 2.5 Flash' :
-          translationModel === 'deepseek-chat' ? 'DeepSeek Chat' :
-          'OpenAI GPT-4o'
-        }`);
-
         // Check for API keys
         if (translationModel === 'gemini-2.5-flash') {
           if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-            console.error('❌ [API KEY ERROR] No Google API key found');
-            console.error('❌ [API KEY ERROR] GOOGLE_GENERATIVE_AI_API_KEY is required for Gemini models');
             throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
-          }
-          console.log(`✅ [API KEY] Google API key found (length: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY.substring(0, 10)}...)`);
-
-          // Test the Google API with a simple request to verify it works
-          console.log(`🧪 [API TEST] Testing Google API with simple request...`);
-          try {
-            const testResult = await streamText({
-              model: selectedModel,
-              prompt: 'Say "Hello world" in English.',
-              temperature: 0.3,
-              maxOutputTokens: 50,
-            });
-
-            let testText = '';
-            for await (const chunk of testResult.textStream) {
-              testText += chunk;
-            }
-
-            console.log(`✅ [API TEST] Google API test successful! Response: "${testText}"`);
-          } catch (testError) {
-            console.error(`❌ [API TEST] Google API test failed:`, testError);
-            throw new Error(`Google API test failed: ${testError instanceof Error ? testError.message : 'Unknown error'}`);
           }
         } else if (translationModel === 'deepseek-chat') {
           if (!process.env.DEEPSEEK_API_KEY) {
-            console.error('❌ [API KEY ERROR] No DeepSeek API key found');
             throw new Error('DEEPSEEK_API_KEY environment variable is not set');
           }
-          console.log(`✅ [API KEY] DeepSeek API key found (length: ${process.env.DEEPSEEK_API_KEY.substring(0, 10)}...)`);
         } else {
           if (!process.env.OPENAI_API_KEY) {
-            console.error('❌ [API KEY ERROR] No OpenAI API key found');
             throw new Error('OPENAI_API_KEY environment variable is not set');
           }
-          console.log(`✅ [API KEY] OpenAI API key found (length: ${process.env.OPENAI_API_KEY.substring(0, 10)}...)`);
         }
 
         // Use Vercel AI SDK streamText with selected model
-        let streamBuffer = '';
-        let chunkCount = 0;
-        let streamError: Error | null = null;
-        
-        console.log(`🔄 [PHASE 3] Calling streamText with prompt length: ${getTranslationPrompt(ocrResult.markdown, targetLanguage).length} chars`);
-        
+
         try {
           const result = streamText({
             model: selectedModel,
             prompt: getTranslationPrompt(ocrResult.markdown, targetLanguage),
             temperature: 0.3,
             maxOutputTokens: 4096,
-            onChunk: ({ chunk }) => {
-              chunkCount++;
-              console.log(`📦 [CHUNK ${chunkCount}] Type: ${chunk.type}`);
-              
-              // Log streaming chunks in real-time
-              if (chunk.type === 'text-delta') {
-                streamBuffer += chunk.text;
-                console.log(`📝 [TEXT-DELTA] Received ${chunk.text.length} chars`);
-                process.stdout.write(chunk.text);
-              } else {
-                // Log any other chunk types for debugging
-                console.log(`📦 [OTHER CHUNK TYPE] ${chunk.type}:`, JSON.stringify(chunk, null, 2));
-              }
-            },
           });
-
-            console.log(`🔄 [PHASE 3] ${translationModel} streaming started...`);
-
-          // Save metadata about the pipeline for analytics
-          const metadata = {
-            pipeline: `datalab-surya-ocr + ${translationModel}-streaming`,
-            ocrModel: ocrResult.metadata.model,
-            ocrRequestId: ocrResult.metadata.requestId,
-            ocrConfidence: ocrResult.confidence,
-            translationModel: translationModel,
-            targetLanguage: targetLanguage,
-            ocrProcessingTime: ocrResult.metadata.processingTime,
-          };
-
-          console.log(`📊 [PIPELINE] Metadata:`, metadata);
 
           // IMPORTANT: Use toUIMessageStreamResponse() for useChat hook compatibility
           return result.toUIMessageStreamResponse({
@@ -260,50 +153,24 @@ export async function POST(req: Request) {
               'X-Translation-Model': translationModel,
             },
             onFinish: async ({ messages: newMessages }) => {
-              console.log(`\n\n✅ [PHASE 3] ${translationModel} streaming complete`);
-              console.log(`📊 [PHASE 3] Total chunks received: ${chunkCount}`);
-              console.log(`📊 [PHASE 3] Total output length: ${streamBuffer.length} characters`);
-              console.log(`📊 [PHASE 3] New messages count: ${newMessages.length}`);
-              
-              if (streamError) {
-                console.error(`❌ [PHASE 3] Stream error encountered:`, streamError);
-              }
-              
-              console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
-              console.log(`📥 [PHASE 3] FULL TRANSLATION OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
-
               if (!historyEnabled) {
-                console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
                 return;
               }
 
-              console.log(`💾 [SAVE] Attempting to save ${newMessages.length} messages for chat ${chatId}...`);
               try {
-                const saveStart = Date.now();
                 await saveChat(chatId, newMessages);
-                const saveDuration = Date.now() - saveStart;
-                console.log(`✅ [SAVE] Saved ${newMessages.length} messages to Redis in ${saveDuration}ms`);
               } catch (error) {
-                console.error('❌ [SAVE] Failed to save chat to Redis:', error);
+                console.error('Failed to save chat to Redis:', error);
                 // Don't throw - we don't want to break the stream
               }
             },
           });
         } catch (error) {
-          streamError = error as Error;
-          console.error('❌ [PHASE 3] Critical error in streamText:', error);
-          console.error('❌ [PHASE 3] Error details:', {
-            name: (error as Error).name,
-            message: (error as Error).message,
-            stack: (error as Error).stack,
-          });
+          console.error('Critical error in streamText:', error);
           throw error;
         }
       } catch (error) {
-        console.error('❌ [PIPELINE] Error:', error);
-
-        // FALLBACK: Use Gemini 2.5 Flash if pipeline fails
-        console.log(`🔄 [FALLBACK] Using Gemini 2.5 Flash as fallback...`);
+        console.error('Pipeline error:', error);
         // Fall through to original Gemini implementation below
       }
     }
@@ -313,21 +180,11 @@ export async function POST(req: Request) {
     // (Used for non-image requests or pipeline failures)
     // ============================================
 
-    console.log(`🔄 [GEMINI] Using Gemini 2.5 Flash for text-only request`);
-
     // Stream the AI response with Gemini 2.5 Flash vision support
-    let streamBuffer = '';
     const result = streamText({
       model: google(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: convertToModelMessages(allMessages),
-      onChunk: ({ chunk }) => {
-        // Log streaming chunks in real-time
-        if (chunk.type === 'text-delta') {
-          streamBuffer += chunk.text;
-          process.stdout.write(chunk.text);
-        }
-      },
     });
 
     // Return the streaming response directly (no refusal checking)
@@ -342,24 +199,14 @@ export async function POST(req: Request) {
 
       // Save complete conversation history when stream finishes
       onFinish: async ({ messages }) => {
-        console.log(`\n\n✅ [GEMINI] Streaming complete`);
-        console.log(`📊 [GEMINI] Total output length: ${streamBuffer.length} characters`);
-        console.log(`📥 [GEMINI] FULL OUTPUT (first 500 chars):\n${streamBuffer.substring(0, 500)}...\n`);
-        console.log(`📥 [GEMINI] FULL OUTPUT (last 500 chars):\n...${streamBuffer.substring(Math.max(0, streamBuffer.length - 500))}\n`);
-
         if (!historyEnabled) {
-          console.log(`⏭️ [SAVE] Skipping Redis save - chat history disabled by user`);
           return;
         }
 
-        console.log(`💾 [SAVE] Attempting to save ${messages.length} messages for chat ${chatId}...`);
         try {
-          const saveStart = Date.now();
           await saveChat(chatId, messages);
-          const saveDuration = Date.now() - saveStart;
-          console.log(`✅ [SAVE] Saved ${messages.length} messages to Redis in ${saveDuration}ms`);
         } catch (error) {
-          console.error('❌ [SAVE] Failed to save chat to Redis:', error);
+          console.error('Failed to save chat to Redis:', error);
           // Don't throw - we don't want to break the stream
         }
       },

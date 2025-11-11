@@ -1,7 +1,8 @@
-import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
 import { updateChatTitle } from '@/lib/chat-store';
+import { getOpenRouterModel, validateOpenRouterConfig } from '@/config/openrouter';
+import { MODEL_CONFIG } from '@/config/model';
 
 // Title generation should be fast, but allow some buffer
 export const maxDuration = 15;
@@ -11,6 +12,9 @@ export const maxDuration = 15;
  */
 export async function POST(req: Request) {
   try {
+    // Validate OpenRouter API key is configured
+    validateOpenRouterConfig();
+
     const { chatId, firstMessage } = await req.json();
 
     if (!chatId || !firstMessage) {
@@ -20,9 +24,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Generate a concise title using AI
+    // Generate a concise title using AI (via OpenRouter)
     const { text: title } = await generateText({
-      model: google('gemini-2.5-flash'), // Use Gemini 2.5 Flash for title generation
+      model: getOpenRouterModel(MODEL_CONFIG.models.titleGeneration),
       system: 'You are a title generator. Generate a very short, concise title (max 6 words) that captures the main topic of the user\'s message. Only return the title, no quotes or extra text.',
       prompt: `Generate a short title for this message: "${firstMessage}"`,
     });

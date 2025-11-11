@@ -123,7 +123,7 @@ export default function Home() {
             message: messages[messages.length - 1], // Only last message
             id, // Chat ID
             historyEnabled: currentHistoryEnabled,
-            translationModel: 'deepseek-chat' // Always use DeepSeek Chat
+            translationModel: 'openrouter/polaris-alpha' // Polaris Alpha via OpenRouter
           }
         };
       },

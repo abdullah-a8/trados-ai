@@ -1,4 +1,3 @@
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import {
   streamText,
   convertToModelMessages,
@@ -15,13 +14,9 @@ import {
   getTranslationPrompt,
   detectTargetLanguage,
 } from '@/lib/openai-translation';
-import { openai } from '@ai-sdk/openai';
-import { deepseek } from '@ai-sdk/deepseek';
 
-// Initialize Google Generative AI with explicit API key
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
+// OpenRouter unified AI provider
+import { getOpenRouterModel, validateOpenRouterConfig, OPENROUTER_MODELS } from '@/config/openrouter';
 
 // Extended duration for vision and complex tasks (Pro plan with Fluid Compute)
 // Vercel 2025: Hobby=60s max, Pro=300s max, Enterprise=900s max
@@ -37,13 +32,16 @@ export async function POST(req: Request) {
       message,
       id: chatId,
       historyEnabled = true, // Default to true for backward compatibility
-      translationModel = 'gpt-4o' // Default to GPT-4o
+      translationModel = 'openrouter/polaris-alpha' // Default to Polaris Alpha via OpenRouter
     }: {
       message: UIMessage;
       id: string;
       historyEnabled?: boolean;
       translationModel?: string;
     } = body;
+
+    // Validate OpenRouter API key is configured
+    validateOpenRouterConfig();
 
     // Load previous messages from Redis (with aggressive timeout to not block streaming)
     let previousMessages: UIMessage[];
@@ -109,26 +107,8 @@ export async function POST(req: Request) {
 
         // PHASE 3: TRANSLATION WITH SELECTED MODEL (STREAMING DIRECTLY TO FRONTEND)
 
-        // Select the appropriate model based on user choice
-        const selectedModel =
-          translationModel === 'gemini-2.5-flash' ? google(MODEL_CONFIG.modelId) :
-          translationModel === 'deepseek-chat' ? deepseek('deepseek-chat') :
-          openai('gpt-4o'); // Default to GPT-4o
-
-        // Check for API keys
-        if (translationModel === 'gemini-2.5-flash') {
-          if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-            throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
-          }
-        } else if (translationModel === 'deepseek-chat') {
-          if (!process.env.DEEPSEEK_API_KEY) {
-            throw new Error('DEEPSEEK_API_KEY environment variable is not set');
-          }
-        } else {
-          if (!process.env.OPENAI_API_KEY) {
-            throw new Error('OPENAI_API_KEY environment variable is not set');
-          }
-        }
+        // Get the model from OpenRouter (handles all providers through single API)
+        const selectedModel = getOpenRouterModel(translationModel);
 
         // Use Vercel AI SDK streamText with selected model
 
@@ -176,13 +156,13 @@ export async function POST(req: Request) {
     }
 
     // ============================================
-    // FALLBACK: ORIGINAL GEMINI 2.5 FLASH FLOW
+    // FALLBACK: DEFAULT MODEL FLOW
     // (Used for non-image requests or pipeline failures)
     // ============================================
 
-    // Stream the AI response with Gemini 2.5 Flash vision support
+    // Stream the AI response with default model (Gemini 2.0 Flash via OpenRouter)
     const result = streamText({
-      model: google(MODEL_CONFIG.modelId),
+      model: getOpenRouterModel(MODEL_CONFIG.modelId),
       system: TRADOS_SYSTEM_PROMPT,
       messages: convertToModelMessages(allMessages),
     });

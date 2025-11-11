@@ -10,11 +10,28 @@ cp .env.example .env.local
 
 Required API keys:
 - **DATALAB_API_KEY**: Get from https://www.datalab.to/ (Surya OCR for multilingual image text extraction)
-- **OPENAI_API_KEY**: Get from https://platform.openai.com/api-keys (GPT-4o for translation)
-- **GOOGLE_GENERATIVE_AI_API_KEY**: Get from https://aistudio.google.com/app/apikey (Gemini 2.5 Flash)
+- **OPENROUTER_API_KEY**: Get from https://openrouter.ai/keys (Unified AI provider - access 200+ models including GPT-4o, Gemini, DeepSeek, Claude, and more)
 - **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN**: Get from https://console.upstash.com/ (chat history storage)
 - **AUTH_USERNAME** and **AUTH_PASSWORD**: Set your own credentials for authentication
 - **SESSION_SECRET**: Generate using `openssl rand -base64 32`
+
+### Why OpenRouter?
+
+This project uses [OpenRouter](https://openrouter.ai/) as a unified AI provider, which offers:
+- **Single API Key**: Access 200+ models from Google, OpenAI, Anthropic, DeepSeek, Meta, and more
+- **Easy Model Switching**: Change models without code changes or managing multiple API keys
+- **Cost Optimization**: Automatic routing to the most cost-effective providers
+- **Free Tier**: Many models available on the free tier with generous limits
+- **Fallback Support**: Automatic failover if a model is unavailable
+
+### Supported Models
+
+The application can use any model available on OpenRouter. Current defaults:
+- **Translation**: DeepSeek Chat (fast and accurate)
+- **General Chat**: Gemini 2.0 Flash (excellent vision and multilingual support)
+- **Title Generation**: Gemini 2.0 Flash (quick and efficient)
+
+You can easily switch between models by updating the configuration in `src/config/openrouter.ts`.
 
 ## Getting Started
 
